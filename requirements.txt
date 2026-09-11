@@ -7,3 +7,6 @@ pandas==2.3.2
 Pillow==11.3.0
 PyYAML==6.0.3
 pytest==8.4.2
+
+# One-time dataset fetch (Step 1 setup) — kagglehub.dataset_download()
+kagglehub==1.0.1

@@ -77,17 +77,17 @@ Six phases, eighteen steps. Checkboxes track our progress.
 
 *Goal: a runnable project skeleton, and a real understanding of the data we will spend the whole project on.*
 
-- [ ] **Step 1 — Project skeleton**
+- [x] **Step 1 — Project skeleton**
   - **Build:** Python package under `src/medimageforge/`, virtualenv, `requirements.txt`, `pyproject.toml` (editable install), YAML config loader, logging setup, first CLI command (`python -m medimageforge info`), first test.
   - **Why:** Every later component imports this foundation. You learn *why* code lives in an installable package (not loose scripts), *why* configuration lives outside code, and *why* we use structured logging instead of `print`.
   - **Done:** `python -m medimageforge info` prints the resolved config; `pytest` passes.
 
-- [ ] **Step 2 — Dataset explorer**
+- [x] **Step 2 — Dataset explorer**
   - **Build:** A script/command that scans `data/`, parses both CSVs, verifies files against `SHA256SUMS.txt`, and prints a report: patients, slice counts, window folders, label distribution, missing/extra files.
   - **Why:** You cannot build a pipeline for data you have not measured. Checksums teach **data integrity** — the first job of any ingestion system.
   - **Done:** Report matches reality (82 patients, ~2.5k slices/window); checksum verification passes or explicitly reports mismatches.
 
-- [ ] **Step 3 — Image inspection**
+- [x] **Step 3 — Image inspection**
   - **Build:** Load slices, display brain vs bone window side by side, overlay a `_HGE_Seg` mask on its slice, inspect pixel statistics.
   - **Why:** Understand CT windowing (same scan, different contrast for different tissue), what a segmentation mask is, and what a model will eventually see.
   - **Done:** You can visually confirm a mask aligns with a hemorrhage region.
