@@ -1,0 +1,23 @@
+# MedImageForge default configuration.
+# All paths are relative to the project root (the folder containing this repo).
+# Steps later in the roadmap read everything from here instead of hardcoding paths.
+
+project:
+  name: medimageforge
+  version: 0.1.0
+
+paths:
+  data_dir: data                          # the dataset root (gitignored)
+  raw_dir: data/Patients_CT               # raw zone: patient folders, never modified
+  labels_csv: data/hemorrhage_diagnosis.csv
+  demographics_csv: data/patient_demographics.csv
+  checksums_file: data/SHA256SUMS.txt     # official integrity checksums
+  artifacts_dir: artifacts                # everything we generate (manifests, curated data, reports)
+
+dataset:
+  patient_id_width: 3                     # folder names are zero-padded to 3 digits: 049, 050, ...
+  windows: [brain, bone]                  # the two CT window folders inside each patient dir
+  mask_suffix: _HGE_Seg                   # e.g. 14_HGE_Seg.jpg is the mask for 14.jpg
+
+logging:
+  level: INFO                             # DEBUG while developing, INFO+ in "production"
