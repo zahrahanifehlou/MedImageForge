@@ -15,6 +15,7 @@ import numpy as np
 
 from medimageforge import __version__
 from medimageforge.config import data_path, load_config
+from medimageforge.curate import curate, curation_state, write_report
 from medimageforge.explore import (
     LABEL_COLUMNS,
     label_slice_exists,
@@ -199,6 +200,60 @@ def cmd_ingest(config: dict) -> int:
     return 0
 
 
+def cmd_curate(config: dict, force: bool) -> int:
+    """Validate registered files and write normalized copies to the curated zone."""
+    db_path = data_path(config, "manifest_db")
+    if not db_path.is_file():
+        print("No manifest found — run `python -m medimageforge ingest` first.")
+        return 1
+
+    curated_dir = data_path(config, "curated_dir")
+    labels = load_labels(data_path(config, "labels_csv"))
+    log.info("Curating into %s", curated_dir)
+    report = curate(
+        data_dir=data_path(config, "data_dir"),
+        curated_dir=curated_dir,
+        db_path=db_path,
+        labels=labels,
+        expected_size=tuple(config["dataset"]["expected_size"]),
+        mask_threshold=config["dataset"]["mask_threshold"],
+        force=force,
+    )
+
+    state = curation_state(db_path)
+
+    print("=== This run ===")
+    print(f"Accepted: {report.accepted}")
+    print(f"Rejected: {report.rejected}")
+    print(f"Skipped (already curated, source unchanged): {report.skipped}")
+
+    # The state view is the honest one: it still reports anomalies after an
+    # idempotent re-run, when "this run" did nothing at all.
+    print("\n=== Curated zone state ===")
+    print(f"Accepted: {state['accepted']}")
+    print(f"Rejected: {state['rejected']}")
+
+    if state["rejections"]:
+        print("\nRejections (every one, with reason):")
+        for item in state["rejections"][:20]:
+            print(f"  - {item['rel_path']}: {', '.join(item['reasons'])}")
+        if len(state["rejections"]) > 20:
+            print(f"  ... and {len(state['rejections']) - 20} more (see JSON report)")
+    else:
+        print("\nNo rejections — every validated file passed.")
+
+    if state["warnings"]:
+        print("\nWarnings (curated, but noteworthy):")
+        for item in state["warnings"][:20]:
+            print(f"  ! {item['rel_path']}: {', '.join(item['warnings'])}")
+
+    report_path = data_path(config, "artifacts_dir") / "curation_report.json"
+    write_report(report, state, report_path)
+    print(f"\nCurated zone: {curated_dir}")
+    print(f"JSON report:  {report_path}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="medimageforge")
     parser.add_argument(
@@ -215,6 +270,12 @@ def main() -> int:
     p_inspect.add_argument("patient", help="Patient folder name, e.g. 049")
     p_inspect.add_argument("--slice", type=int, default=None, help="Slice number")
     sub.add_parser("ingest", help="Register all data files into the SQLite manifest")
+    p_curate = sub.add_parser(
+        "curate", help="Validate files and write normalized copies to the curated zone"
+    )
+    p_curate.add_argument(
+        "--force", action="store_true", help="Re-curate files even if already done"
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -229,6 +290,8 @@ def main() -> int:
         return cmd_inspect(config, args.patient, args.slice)
     if args.command == "ingest":
         return cmd_ingest(config)
+    if args.command == "curate":
+        return cmd_curate(config, args.force)
     return 1
 
 

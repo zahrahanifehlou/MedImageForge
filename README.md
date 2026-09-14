@@ -14,30 +14,16 @@ It is designed around the needs of regulated MedTech environments, where teams m
 - How access to sensitive data is controlled
 - How datasets and workflows can be audited and reproduced
 
-> **Important:** HIPAA/FDA compliance is not achieved by software alone. MedImageForge is designed to support compliant processes and controls, but actual compliance depends on the complete organization, infrastructure, procedures, validation, contracts, and regulatory requirements.
 
 ---
 
-# This Is a Learning Project
-
-We build this project **step by step**. The goal is not only a working system — it is to understand **why** each component exists, **what** it does, **how** it works, and **how the components connect**.
-
-**How we work:**
-
-1. Each step is small and has a clear goal.
-2. For every step we answer four questions before coding:
-   - **What** are we building?
-   - **Why** does it exist? (What breaks without it?)
-   - **How** does it work internally?
-   - **How** does it connect to what we already built?
-3. A step is only "done" when it runs, is verified, and is understood.
-4. We never implement future steps early. If a later need appears, we note it and continue.
+# Local first
 
 **Build order — local first, cloud later.** The full vision of this platform involves cloud infrastructure (AWS/Azure). We deliberately build everything **locally** first, because you cannot understand a cloud ingestion pipeline before you can load and inspect a single image. In Phase 6 we map every local component to its cloud equivalent — by then each component's job will be obvious, so the mapping will make sense.
 
 ---
 
-# The Dataset We Use
+# Dataset 
 
 All steps run on a real, public, anonymized dataset already present in `data/`:
 
@@ -57,7 +43,6 @@ All steps run on a real, public, anonymized dataset already present in `data/`:
 
 Why this dataset is ideal for learning:
 
-- It is **real medical data**, already anonymized and published for research.
 - It has **two "modalities"** (brain/bone windows), per-slice **labels**, and **segmentation masks** — enough to exercise every part of the platform.
 - It is **small enough** to process on a laptop, but messy enough (JPGs instead of DICOM, inconsistent slice counts) to teach real-world curation lessons.
 
@@ -101,7 +86,7 @@ Six phases, eighteen steps. Checkboxes track our progress.
   - **Why:** A manifest is the platform's source of truth — *you cannot manage what you cannot list*. SQLite teaches that a database beats a CSV once you need queries and updates.
   - **Done:** Manifest row count matches the explorer's count; re-running ingest changes nothing.
 
-- [ ] **Step 5 — Curation pipeline**
+- [x] **Step 5 — Curation pipeline**
   - **Build:** Validation (readable image? expected dimensions? has a label row?), duplicate detection via hashes, and normalized copies written to a separate `curated/` zone, plus a curation report.
   - **Why:** Learn **zone separation** (raw vs curated — never edit raw data in place) and **idempotent, resumable** pipelines.
   - **Done:** Curated zone contains only validated files; the report lists every rejection with a reason.
@@ -291,18 +276,6 @@ De-identification, audit trails, SOPs, validation protocols, risk assessment, ch
 Services layer (Steps 13–15) wraps all of the above: audit log, API, browser UI.
 Cloud layer (Step 17) maps each box to AWS/Azure.
 
----
-
-# Design Principles
-
-1. **Security by design** — built in, not bolted on.
-2. **Privacy by design** — minimize, protect, pseudonymize working copies.
-3. **Reproducibility** — an experiment = code version + dataset version + config + environment.
-4. **Traceability** — always answerable: *who changed what, when, why, and what did it affect?*
-5. **Automation** — repetitive manual work becomes tested, observable pipelines.
-6. **Human oversight** — AI-suggested labels still need review.
-7. **Separation of environments** — dev / test / validation / production are distinct.
-8. **Never modify raw data** — raw is immutable; everything else is derived and regenerable.
 
 ---
 
@@ -364,21 +337,10 @@ python -m medimageforge info
 pytest
 ```
 
----
-
-# Medical Data Safety
-
-**Never commit real patient data to this repository.** `data/` is gitignored.
-
-Our dataset is already anonymized and public — but we still treat `data/` as untrusted input and keep all *derived* artifacts pseudonymized, to practice the habits a real MedTech system requires.
-
-Do not add: patient names, MRNs, dates of birth, addresses, contact details, direct identifiers, unapproved DICOM containing PHI, or any sensitive patient information.
 
 ---
 
-# Expected Benefits
 
-A completed MedImageForge demonstrates: reduced manual data work, higher dataset quality, reproducible ML experiments, tracked dataset changes, efficient annotation, automatic hard-case discovery, stronger security/auditability, and a documented path to regulated development.
 
 # Success Criteria
 

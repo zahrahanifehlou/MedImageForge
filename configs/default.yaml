@@ -14,11 +14,14 @@ paths:
   checksums_file: data/SHA256SUMS.txt     # official integrity checksums
   artifacts_dir: artifacts                # everything we generate (manifests, curated data, reports)
   manifest_db: artifacts/manifest.db      # SQLite manifest — the platform's source of truth
+  curated_dir: artifacts/curated          # curated zone: validated, normalized copies (never raw)
 
 dataset:
   patient_id_width: 3                     # folder names are zero-padded to 3 digits: 049, 050, ...
   windows: [brain, bone]                  # the two CT window folders inside each patient dir
   mask_suffix: _HGE_Seg                   # e.g. 14_HGE_Seg.jpg is the mask for 14.jpg
+  expected_size: [650, 650]               # every slice must be exactly this (validation rule)
+  mask_threshold: 128                     # JPEG masks aren't binary; threshold to recover 0/255
 
 logging:
   level: INFO                             # DEBUG while developing, INFO+ in "production"
