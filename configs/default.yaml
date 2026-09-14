@@ -13,6 +13,7 @@ paths:
   demographics_csv: data/patient_demographics.csv
   checksums_file: data/SHA256SUMS.txt     # official integrity checksums
   artifacts_dir: artifacts                # everything we generate (manifests, curated data, reports)
+  manifest_db: artifacts/manifest.db      # SQLite manifest — the platform's source of truth
 
 dataset:
   patient_id_width: 3                     # folder names are zero-padded to 3 digits: 049, 050, ...

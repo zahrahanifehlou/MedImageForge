@@ -96,7 +96,7 @@ Six phases, eighteen steps. Checkboxes track our progress.
 
 *Goal: raw files on disk become a trusted, queryable, de-identified dataset.*
 
-- [ ] **Step 4 — Ingestion pipeline & manifest**
+- [x] **Step 4 — Ingestion pipeline & manifest**
   - **Build:** An ingest command that registers every file into a **manifest** (SQLite DB): patient, slice, window, path, SHA-256, size, status. Re-runnable (idempotent).
   - **Why:** A manifest is the platform's source of truth — *you cannot manage what you cannot list*. SQLite teaches that a database beats a CSV once you need queries and updates.
   - **Done:** Manifest row count matches the explorer's count; re-running ingest changes nothing.

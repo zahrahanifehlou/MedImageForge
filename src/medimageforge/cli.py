@@ -32,6 +32,7 @@ from medimageforge.imaging import (
     side_by_side,
 )
 from medimageforge.logging_utils import configure_logging, get_logger
+from medimageforge.manifest import ingest
 
 log = get_logger(__name__)
 
@@ -174,6 +175,30 @@ def cmd_inspect(config: dict, patient: str, slice_no: int | None) -> int:
     return 0
 
 
+def cmd_ingest(config: dict) -> int:
+    """Register every file under data/ into the SQLite manifest.
+
+    Re-runnable by design: the second run on unchanged data should report
+    all files 'unchanged' — that is how you know the pipeline is idempotent.
+    """
+    db_path = data_path(config, "manifest_db")
+    log.info("Ingesting %s into %s", data_path(config, "data_dir"), db_path)
+    report = ingest(
+        data_path(config, "data_dir"),
+        db_path,
+        config["dataset"]["windows"],
+        config["dataset"]["mask_suffix"],
+    )
+    print("=== Ingest report ===")
+    print(f"Files on disk:  {report.total_on_disk}")
+    print(f"New:            {report.new}")
+    print(f"Unchanged:      {report.unchanged}")
+    print(f"Updated:        {report.updated}")
+    print(f"Missing:        {report.missing}")
+    print(f"Manifest:       {db_path}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="medimageforge")
     parser.add_argument(
@@ -189,6 +214,7 @@ def main() -> int:
     )
     p_inspect.add_argument("patient", help="Patient folder name, e.g. 049")
     p_inspect.add_argument("--slice", type=int, default=None, help="Slice number")
+    sub.add_parser("ingest", help="Register all data files into the SQLite manifest")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -201,6 +227,8 @@ def main() -> int:
         return cmd_explore(config)
     if args.command == "inspect":
         return cmd_inspect(config, args.patient, args.slice)
+    if args.command == "ingest":
+        return cmd_ingest(config)
     return 1
 
 
