@@ -10,3 +10,9 @@ pytest==8.4.2
 
 # One-time dataset fetch (Step 1 setup) — kagglehub.dataset_download()
 kagglehub==1.0.1
+
+# Step 10 — baseline model. CPU build: far smaller than the CUDA wheel and
+# enough for a ~100k-parameter CNN on 1750 slices (~70 s for 15 epochs).
+# Install with:
+#   pip install torch==2.13.0+cpu --index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0+cpu

@@ -48,6 +48,7 @@ from medimageforge.privacy import (
     find_id_leaks,
     load_or_create_salt,
     pseudonymize_frames,
+    read_pseudonym_map,
     scan_columns,
     scan_free_text,
     scan_image_metadata,
@@ -491,10 +492,10 @@ def cmd_release(config: dict, force: bool, verify: bool) -> int:
 
     if verify:
         db_path = data_path(config, "manifest_db")
-        salt = load_or_create_salt(data_path(config, "salt_file"))
-        findings = verify_release(
-            release_dir, curated_dir, build_pseudonym_map(db_path, salt)
-        )
+        # READ the stored map — do not rebuild it. Rebuilding would overwrite
+        # a corrupted mapping with a correct one and then verify the repair,
+        # reporting PASS on data that was broken a moment earlier.
+        findings = verify_release(release_dir, curated_dir, read_pseudonym_map(db_path))
         print(f"=== Verifying {release_dir} ===")
         total = sum(len(v) for v in findings.values())
         print(f"Release files modified/missing: {len(findings['release_files'])}")
@@ -583,6 +584,71 @@ def cmd_release(config: dict, force: bool, verify: bool) -> int:
     return 0
 
 
+def cmd_train(config: dict, epochs: int | None) -> int:
+    """Train the baseline classifier on a dataset release and record the run."""
+    # Imported lazily so every other command still works without torch.
+    from medimageforge.train import TrainingConfig, run_training
+
+    version = config["release"]["version"]
+    release_dir = data_path(config, "datasets_dir") / version
+    if not (release_dir / "index.csv").is_file():
+        print(f"No release at {release_dir} — run `python -m medimageforge release` first.")
+        return 1
+
+    settings = config["training"]
+    training_config = TrainingConfig(
+        image_size=settings["image_size"],
+        batch_size=settings["batch_size"],
+        epochs=epochs if epochs is not None else settings["epochs"],
+        learning_rate=settings["learning_rate"],
+        weight_decay=settings["weight_decay"],
+        dropout=settings["dropout"],
+        seed=settings["seed"],
+        window=settings["window"],
+    )
+
+    record = run_training(
+        release_dir=release_dir,
+        db_path=data_path(config, "manifest_db"),
+        curated_dir=data_path(config, "curated_dir"),
+        runs_dir=data_path(config, "runs_dir"),
+        config=training_config,
+    )
+
+    print(f"=== Run {record.run_id} ===")
+    print(f"dataset version: {record.dataset_version}   code: {record.code_version} "
+          f"({(record.git_commit or 'no-git')[:8]})")
+    print(f"model: {record.model['architecture']} "
+          f"({record.model['parameters']:,} parameters)")
+    print(f"splits: {record.split_sizes}")
+    print(f"selected epoch {record.selected_epoch}, threshold {record.selected_threshold:.3f}")
+
+    print(f"\n{'metric':20s} {'baseline (test)':>16s} {'model (test)':>14s}")
+    baseline, test = record.baseline["test"], record.metrics["test"]
+    for key in ("auroc", "balanced_accuracy", "recall", "precision", "f1", "accuracy"):
+        print(f"{key:20s} {baseline[key]:16.4f} {test[key]:14.4f}")
+    print(f"\nconfusion (test): tp={test['tp']:.0f} fp={test['fp']:.0f} "
+          f"tn={test['tn']:.0f} fn={test['fn']:.0f}")
+
+    ci = test.get("auroc_ci", {})
+    if ci:
+        print(f"\ntest AUROC {ci['auroc']:.4f}  95% CI [{ci['ci_low']:.3f}, "
+              f"{ci['ci_high']:.3f}]  (resampling {ci['n_units']} "
+              f"{ci.get('resampling_unit', 'unit')}s)")
+        val_ci = record.metrics["validation"].get("auroc_ci", {})
+        if val_ci:
+            print(f"validation AUROC {val_ci['auroc']:.4f} — the gap to test is well "
+                  f"inside this interval, so it is noise, not a finding.")
+
+    beats = test["auroc"] > baseline["auroc"] and test["f1"] > baseline["f1"]
+    print(f"\nBeats the trivial baseline: {'YES' if beats else 'NO'}")
+    print(f"Note: the baseline reaches {baseline['accuracy']:.3f} accuracy by never "
+          f"predicting a hemorrhage — which is why AUROC/recall lead this table.")
+    print(f"\nRun record: {data_path(config, 'runs_dir') / record.run_id}")
+    print(f"Duration: {record.duration_seconds}s")
+    return 0 if beats else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="medimageforge")
     parser.add_argument(
@@ -639,6 +705,10 @@ def main() -> int:
         action="store_true",
         help="Verify an existing release against its checksums and the curated zone",
     )
+    p_train = sub.add_parser("train", help="Train the baseline classifier on a release")
+    p_train.add_argument(
+        "--epochs", type=int, default=None, help="Override the configured epoch count"
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -665,6 +735,8 @@ def main() -> int:
         return cmd_qc(config, args.skip_leakage)
     if args.command == "release":
         return cmd_release(config, args.force, args.verify)
+    if args.command == "train":
+        return cmd_train(config, args.epochs)
     return 1
 
 

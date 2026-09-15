@@ -1,281 +1,281 @@
 # MedImageForge
 
-## End-to-End Medical Imaging Data Platform for Continuous AI Model Improvement
+<p align="center">
+  <img src="docs/images/medimageforge-logo.png" alt="MedImageForge Logo" width="520"/>
+</p>
 
-MedImageForge is a platform for collecting, organizing, annotating, validating, versioning, and delivering **medical imaging datasets** for machine-learning development.
+<p align="center">
+  <strong>End-to-End Medical Imaging Data Platform<br>for Continuous AI Model Improvement</strong>
+</p>
 
-It is designed around the needs of regulated MedTech environments, where teams must know:
-
-- Where each image came from
-- How the image was processed
-- Who changed or annotated it
-- Which dataset version was used for a model
-- Whether the data passed quality checks
-- How access to sensitive data is controlled
-- How datasets and workflows can be audited and reproduced
-
-
----
-
-# Local first
-
-**Build order — local first, cloud later.** The full vision of this platform involves cloud infrastructure (AWS/Azure). We deliberately build everything **locally** first, because you cannot understand a cloud ingestion pipeline before you can load and inspect a single image. In Phase 6 we map every local component to its cloud equivalent — by then each component's job will be obvious, so the mapping will make sense.
+<p align="center">
+  <img src="https://img.shields.io/badge/Phase-1%20%E2%80%93%203-green?style=flat-square" alt="Phases 1-3 complete"/>
+  <img src="https://img.shields.io/badge/Phase-4%20%E2%80%93%206-lightgrey?style=flat-square" alt="Phases 4-6 pending"/>
+  <img src="https://img.shields.io/badge/Python-3.10+-blue?style=flat-square" alt="Python"/>
+  <img src="https://img.shields.io/badge/License-Proprietary-red?style=flat-square" alt="License"/>
+</p>
 
 ---
 
-# Dataset 
+**MedImageForge** is a platform for collecting, organizing, annotating, validating, versioning, and delivering **medical imaging datasets** for machine-learning development.
+
+It is built for regulated MedTech environments, where teams must always know:
+
+| Question | Why it matters |
+|----------|----------------|
+| Where each image came from | Provenance & chain of custody |
+| How the image was processed | Reproducibility |
+| Who changed or annotated it | Accountability |
+| Which dataset version trained a model | Experiment tracking |
+| Whether the data passed quality checks | Trustworthiness |
+| How access to sensitive data is controlled | Privacy & security |
+| How datasets and workflows can be audited | Regulatory readiness |
+
+---
+
+## Local First Philosophy
+
+> **Build order — local first, cloud later.**
+
+The full vision includes cloud infrastructure (AWS / Azure).  
+We deliberately build **everything locally first**, because you cannot understand a cloud ingestion pipeline until you can load and inspect a single image.
+
+In **Phase 6** we map every local component to its cloud equivalent. By then each component’s job is obvious, so the mapping becomes straightforward.
+
+---
+
+## Dataset
 
 All steps run on a real, public, anonymized dataset already present in `data/`:
 
-**Computed Tomography Images for Intracranial Hemorrhage Detection and Segmentation**
-(Hssayeni et al., PhysioNet — see `data/README.txt` and `data/LICENSE.txt`)
+**Computed Tomography Images for Intracranial Hemorrhage Detection and Segmentation**  
+*(Hssayeni et al., PhysioNet — see `data/README.txt` and `data/LICENSE.txt`)*
 
-| Property | Value |
-|---|---|
-| Patients | 82 (`data/Patients_CT/049` … `130`) |
-| Slices per patient | ~30 (5 mm slice thickness) |
-| Image format | 650×650 grayscale JPG, two window settings per slice |
-| Windows | `brain/` (soft tissue — used to see hemorrhage) and `bone/` (bone/fractures) |
-| Slice labels | `data/hemorrhage_diagnosis.csv` — per slice: Intraventricular, Intraparenchymal, Subarachnoid, Epidural, Subdural, No_Hemorrhage, Fracture_Yes_No |
-| Patient metadata | `data/patient_demographics.csv` — age, gender, patient-level conditions |
-| Segmentation masks | `*_HGE_Seg.jpg` files inside each `brain/` folder — white region = hemorrhage |
-| Integrity | `data/SHA256SUMS.txt` — official checksums for every file |
+| Property              | Value |
+|-----------------------|-------|
+| Patients              | 82 (`data/Patients_CT/049` … `130`) |
+| Slices per patient    | ~30 (5 mm slice thickness) |
+| Image format          | 650×650 grayscale JPG, two window settings per slice |
+| Windows               | `brain/` (soft tissue — hemorrhage) and `bone/` (bone / fractures) |
+| Slice labels          | `data/hemorrhage_diagnosis.csv` — multi-label per slice |
+| Patient metadata      | `data/patient_demographics.csv` — age, gender, conditions |
+| Segmentation masks    | `*_HGE_Seg.jpg` inside each `brain/` folder |
+| Integrity             | `data/SHA256SUMS.txt` — official checksums |
 
-Why this dataset is ideal for learning:
+### Why this dataset is ideal for learning
 
-- It has **two "modalities"** (brain/bone windows), per-slice **labels**, and **segmentation masks** — enough to exercise every part of the platform.
-- It is **small enough** to process on a laptop, but messy enough (JPGs instead of DICOM, inconsistent slice counts) to teach real-world curation lessons.
+- Two “modalities” (brain / bone windows) + per-slice labels + segmentation masks → exercises every platform component
+- Small enough to process on a laptop, yet messy enough (JPGs instead of DICOM, inconsistent slice counts) to teach real-world curation
 
-> The original `data/split_data.py` is the dataset author's reference script. It uses APIs that no longer exist (`scipy.misc.imread`). We will not rely on it — we will write our own, better pipeline and learn why in the process.
-
----
-
-# The Roadmap
-
-Six phases, eighteen steps. Checkboxes track our progress.
-
-**Legend for every step:** `Build` = what we create · `Why` = the concept it teaches · `Done` = how we verify it.
+> The original `data/split_data.py` is the dataset author’s reference script. It uses deprecated APIs (`scipy.misc.imread`). We will not rely on it — we write our own, better pipeline and learn *why* in the process.
 
 ---
 
-## Phase 1 — Foundations & Knowing the Data
+## The Roadmap
 
-*Goal: a runnable project skeleton, and a real understanding of the data we will spend the whole project on.*
+Six phases • Eighteen steps. Checkboxes track progress.
 
-- [x] **Step 1 — Project skeleton**
-  - **Build:** Python package under `src/medimageforge/`, virtualenv, `requirements.txt`, `pyproject.toml` (editable install), YAML config loader, logging setup, first CLI command (`python -m medimageforge info`), first test.
-  - **Why:** Every later component imports this foundation. You learn *why* code lives in an installable package (not loose scripts), *why* configuration lives outside code, and *why* we use structured logging instead of `print`.
-  - **Done:** `python -m medimageforge info` prints the resolved config; `pytest` passes.
+**Legend for every step**  
+`Build` = what we create · `Why` = the concept it teaches · `Done` = how we verify it
 
-- [x] **Step 2 — Dataset explorer**
-  - **Build:** A script/command that scans `data/`, parses both CSVs, verifies files against `SHA256SUMS.txt`, and prints a report: patients, slice counts, window folders, label distribution, missing/extra files.
-  - **Why:** You cannot build a pipeline for data you have not measured. Checksums teach **data integrity** — the first job of any ingestion system.
-  - **Done:** Report matches reality (82 patients, ~2.5k slices/window); checksum verification passes or explicitly reports mismatches.
+---
 
-- [x] **Step 3 — Image inspection**
-  - **Build:** Load slices, display brain vs bone window side by side, overlay a `_HGE_Seg` mask on its slice, inspect pixel statistics.
-  - **Why:** Understand CT windowing (same scan, different contrast for different tissue), what a segmentation mask is, and what a model will eventually see.
-  - **Done:** You can visually confirm a mask aligns with a hemorrhage region.
+### Phase 1 — Foundations & Knowing the Data
 
-## Phase 2 — Ingestion, Curation & Privacy
+*Goal: a runnable project skeleton and a real understanding of the data.*
 
-*Goal: raw files on disk become a trusted, queryable, de-identified dataset.*
+- [x] **Step 1 — Project skeleton**  
+  **Build:** Python package under `src/medimageforge/`, virtualenv, `requirements.txt`, `pyproject.toml`, YAML config, logging, first CLI (`python -m medimageforge info`), first test.  
+  **Why:** Every later component imports this foundation. Learn why code lives in an installable package, why configuration lives outside code, and why we use structured logging.  
+  **Done:** `python -m medimageforge info` prints resolved config; `pytest` passes.
 
-- [x] **Step 4 — Ingestion pipeline & manifest**
-  - **Build:** An ingest command that registers every file into a **manifest** (SQLite DB): patient, slice, window, path, SHA-256, size, status. Re-runnable (idempotent).
-  - **Why:** A manifest is the platform's source of truth — *you cannot manage what you cannot list*. SQLite teaches that a database beats a CSV once you need queries and updates.
-  - **Done:** Manifest row count matches the explorer's count; re-running ingest changes nothing.
+- [x] **Step 2 — Dataset explorer**  
+  **Build:** Script that scans `data/`, parses both CSVs, verifies files against `SHA256SUMS.txt`, and prints a full report.  
+  **Why:** You cannot build a pipeline for data you have not measured. Checksums teach **data integrity**.  
+  **Done:** Report matches reality (82 patients, ~2.5k slices/window); checksum verification passes or reports mismatches.
 
-- [x] **Step 5 — Curation pipeline**
-  - **Build:** Validation (readable image? expected dimensions? has a label row?), duplicate detection via hashes, and normalized copies written to a separate `curated/` zone, plus a curation report.
-  - **Why:** Learn **zone separation** (raw vs curated — never edit raw data in place) and **idempotent, resumable** pipelines.
-  - **Done:** Curated zone contains only validated files; the report lists every rejection with a reason.
+- [x] **Step 3 — Image inspection**  
+  **Build:** Load slices, display brain vs bone side-by-side, overlay `_HGE_Seg` mask, inspect pixel statistics.  
+  **Why:** Understand CT windowing, what a segmentation mask is, and what a model will eventually see.  
+  **Done:** Visually confirm a mask aligns with a hemorrhage region.
 
-- [x] **Step 6 — Privacy & de-identification gate**
-  - **Build:** A check that verifies no PHI exists in our files (already anonymized JPGs — we prove it), plus pseudonymization of patient IDs in all *working* artifacts (e.g., `049` → `PAT-a3f9…`).
-  - **Why:** Learn the difference between **anonymization** and **pseudonymization**, and why privacy is a *gate* that must pass before anything downstream runs.
-  - **Done:** Gate produces a pass/fail privacy report; working artifacts contain no real patient numbers.
+---
 
-## Phase 3 — Annotations, Quality & Versioning
+### Phase 2 — Ingestion, Curation & Privacy
 
-*Goal: labels become first-class data, datasets become reproducible releases.*
+*Goal: raw files become a trusted, queryable, de-identified dataset.*
 
-- [x] **Step 7 — Annotation model & label store**
-  - **Build:** A clean annotation schema (per-slice multi-label classification + segmentation mask reference) loaded into the manifest DB, with **provenance** (which source CSV, whose annotation).
-  - **Why:** Labels are data too. Schema-before-storage is the lesson: five boolean columns in a CSV become a well-defined label taxonomy.
-  - **Done:** For any slice we can query "labels + mask path + provenance" in one call.
+- [x] **Step 4 — Ingestion pipeline & manifest**  
+  **Build:** Ingest command that registers every file into a **manifest** (SQLite): patient, slice, window, path, SHA-256, size, status. Idempotent.  
+  **Why:** A manifest is the platform’s source of truth. SQLite beats a CSV once you need queries and updates.  
+  **Done:** Manifest row count matches explorer; re-running ingest changes nothing.
 
-- [x] **Step 8 — Automated quality gates**
-  - **Build:** A QC suite: image/label count mismatches, orphan files, mask-without-hemorrhage-flag inconsistencies, near-duplicate slices across different patients (leakage!), demographic outliers. Pass/fail quality report.
-  - **Why:** A dataset must **earn** its way to training. Quality gates are the difference between a data lake and a data swamp.
-  - **Done:** Report catches at least one real inconsistency in the raw data (this dataset has some — e.g., labels referencing missing slices).
+- [x] **Step 5 — Curation pipeline**  
+  **Build:** Validation, duplicate detection, normalized copies written to a separate `curated/` zone + curation report.  
+  **Why:** **Zone separation** (raw vs curated — never edit raw data in place) and **idempotent, resumable** pipelines.  
+  **Done:** Curated zone contains only validated files; report lists every rejection with reason.
 
-- [x] **Step 9 — Dataset versioning**
-  - **Build:** Patient-level train/validation/test split, then an immutable snapshot `datasets/v1.0/` containing the split, an index of files, and a **dataset card** (what's inside, counts, known issues).
-  - **Why:** Reproducibility — *"which data trained this model?"* must always be answerable. Splitting **by patient** (not by slice) is the single most important anti-leakage rule in medical imaging.
-  - **Done:** `v1.0` is reproducible from the manifest; no patient appears in two splits.
+- [x] **Step 6 — Privacy & de-identification gate**  
+  **Build:** Check that no PHI exists + pseudonymization of patient IDs in working artifacts (`049` → `PAT-a3f9…`).  
+  **Why:** Difference between **anonymization** and **pseudonymization**. Privacy is a *gate* that must pass before anything downstream runs.  
+  **Done:** Gate produces pass/fail privacy report; working artifacts contain no real patient numbers.
 
-## Phase 4 — ML Integration & the Improvement Loop
+---
+
+### Phase 3 — Annotations, Quality & Versioning
+
+*Goal: labels become first-class data; datasets become reproducible releases.*
+
+- [x] **Step 7 — Annotation model & label store**  
+  **Build:** Clean annotation schema (per-slice multi-label + segmentation mask reference) loaded into the manifest DB with **provenance**.  
+  **Why:** Labels are data too. Schema-before-storage is the lesson.  
+  **Done:** For any slice we can query “labels + mask path + provenance” in one call.
+
+- [x] **Step 8 — Automated quality gates**  
+  **Build:** QC suite for mismatches, orphans, mask/label inconsistencies, near-duplicates (leakage!), demographic outliers.  
+  **Why:** A dataset must **earn** its way to training. Quality gates turn a data lake into a trusted asset.  
+  **Done:** Report catches at least one real inconsistency in the raw data.
+
+- [x] **Step 9 — Dataset versioning**  
+  **Build:** Patient-level train/val/test split → immutable snapshot `datasets/v1.0/` + dataset card.  
+  **Why:** Reproducibility — “which data trained this model?” must always be answerable. Patient-level split is the #1 anti-leakage rule.  
+  **Done:** `v1.0` is reproducible from the manifest; no patient appears in two splits.
+
+---
+
+### Phase 4 — ML Integration & the Improvement Loop
 
 *Goal: versioned data flows into a model; model errors flow back as better data.*
 
-- [ ] **Step 10 — Baseline model**
-  - **Build:** PyTorch slice-level classifier (hemorrhage vs no hemorrhage) trained on `v1.0`. Each run records: dataset version, code version, config, metrics.
-  - **Why:** Learn the Dataset → DataLoader → model → metrics chain, and why experiment records must reference a *dataset version*, not a folder.
-  - **Done:** Model trains and beats a trivial baseline; run record is complete.
+- [x] **Step 10 — Baseline model**  
+  **Build:** PyTorch slice-level classifier trained on `v1.0`. Each run records dataset version, code version, config, metrics.  
+  **Why:** Dataset → DataLoader → model → metrics chain. Experiment records must reference a *dataset version*.  
+  **Done:** Model trains and beats a trivial baseline; run record is complete.
 
-- [ ] **Step 11 — Evaluation & error analysis**
-  - **Build:** Per-class metrics, confusion matrix, hardest slices ranked, slice-level → patient-level aggregation.
-  - **Why:** Aggregate metrics lie. 82 patients means a single bad patient can swing accuracy; patient-level metrics are the honest number.
-  - **Done:** We can name the specific slices/patients the model fails on.
+- [ ] **Step 11 — Evaluation & error analysis**  
+  **Build:** Per-class metrics, confusion matrix, hardest slices, patient-level aggregation.  
+  **Why:** Aggregate metrics lie. Patient-level metrics are the honest number.  
+  **Done:** We can name the specific slices/patients the model fails on.
 
-- [ ] **Step 12 — Active learning loop**
-  - **Build:** Score cases by model uncertainty → queue top-N "hard" cases → simulate a human reviewer (we use the existing labels as the "reviewer") → release `datasets/v1.1` → retrain → compare.
-  - **Why:** This closes the platform's central loop: **Data → Model → Errors → Better data → Better model.**
-  - **Done:** Documented before/after comparison on the same test split.
+- [ ] **Step 12 — Active learning loop**  
+  **Build:** Score by uncertainty → queue hard cases → simulate reviewer → release `datasets/v1.1` → retrain → compare.  
+  **Why:** Closes the central loop: **Data → Model → Errors → Better data → Better model**.  
+  **Done:** Documented before/after comparison on the same test split.
 
-## Phase 5 — Platform Services
+---
+
+### Phase 5 — Platform Services
 
 *Goal: the pipelines become a platform other programs can talk to.*
 
-- [ ] **Step 13 — Lineage & audit log**
-  - **Build:** Every pipeline run appends an audit record (who/what/when/inputs/outputs). Given any artifact, we can query its full ancestry back to raw ingestion.
-  - **Why:** Traceability is the core regulated-MedTech requirement — and the best debugging tool you will ever build.
-  - **Done:** Pick a file in `v1.1` and print its complete history.
+- [ ] **Step 13 — Lineage & audit log**  
+  **Build:** Every pipeline run appends an audit record. Query full ancestry of any artifact.  
+  **Why:** Traceability is the core regulated-MedTech requirement — and the best debugging tool.  
+  **Done:** Pick a file in `v1.1` and print its complete history.
 
-- [ ] **Step 14 — API service**
-  - **Build:** FastAPI service exposing patients, slices, labels, dataset versions, and QC status.
-  - **Why:** A service boundary forces clean data access patterns and is the seam where access control will later live.
-  - **Done:** Query the manifest over HTTP; the UI (Step 15) uses only this API.
+- [ ] **Step 14 — API service**  
+  **Build:** FastAPI service exposing patients, slices, labels, dataset versions, QC status.  
+  **Why:** A service boundary forces clean data access patterns and is the future home of access control.  
+  **Done:** Query the manifest over HTTP; the UI uses only this API.
 
-- [ ] **Step 15 — Dataset browser UI**
-  - **Build:** A minimal viewer (Streamlit or FiftyOne) to browse patients, windows, overlays, and labels through the API.
-  - **Why:** Humans must be able to *see* the data — no platform survives without a viewer.
-  - **Done:** Browse any patient; visually verify labels and masks.
+- [ ] **Step 15 — Dataset browser UI**  
+  **Build:** Minimal viewer (Streamlit or FiftyOne) to browse patients, windows, overlays, and labels.  
+  **Why:** Humans must be able to *see* the data.  
+  **Done:** Browse any patient; visually verify labels and masks.
 
-## Phase 6 — Production-Readiness & Cloud Mapping
+---
+
+### Phase 6 — Production-Readiness & Cloud Mapping
 
 *Goal: the learning prototype becomes a defensible, documented system.*
 
-- [ ] **Step 16 — Tests, CI & packaging**
-  - **Build:** Fuller pytest suite, GitHub Actions CI, Dockerfile.
-  - **Why:** A pipeline nobody can re-run or deploy is a script, not a platform.
-  - **Done:** CI runs green on a clean checkout; Docker image runs the CLI.
+- [ ] **Step 16 — Tests, CI & packaging**  
+  **Build:** Fuller pytest suite, GitHub Actions CI, Dockerfile.  
+  **Why:** A pipeline nobody can re-run or deploy is a script, not a platform.  
+  **Done:** CI runs green on a clean checkout; Docker image runs the CLI.
 
-- [ ] **Step 17 — Cloud architecture mapping**
-  - **Build:** A documented mapping of every local component to its cloud equivalent — local dirs → S3 zones, ingest script → Lambda/S3 events, SQLite → RDS/DynamoDB, local training → SageMaker, our gates → IAM/RBAC policies — plus an IaC sketch. Optionally, one *real* cloud adapter (e.g., ingest from S3).
-  - **Why:** Now that you know what each component *does*, the cloud version is "the same job, different substrate" — which is the correct mental model.
-  - **Done:** An architecture document a cloud engineer could implement from.
+- [ ] **Step 17 — Cloud architecture mapping**  
+  **Build:** Documented mapping of every local component to its cloud equivalent + IaC sketch. Optionally one real cloud adapter.  
+  **Why:** Once you know what each component *does*, the cloud version is “the same job, different substrate”.  
+  **Done:** An architecture document a cloud engineer could implement from.
 
-- [ ] **Step 18 — Compliance documentation & final review**
-  - **Build:** SOP templates, risk register, audit-trail evidence samples, dataset/model cards, final README polish.
-  - **Why:** In MedTech, *evidence* is a deliverable. This step produces it.
-  - **Done:** A reviewer could audit our data's journey end-to-end from the docs alone.
-
----
-
-# Core Capabilities (the "why" behind the roadmap)
-
-## 1. Secure ingestion
-
-Continuously receive large volumes of imaging data with validation, integrity checks, metadata handling, logging, and controlled access. → *Steps 2, 4, 6*
-
-## 2. Data curation
-
-Raw data is not ML-ready. Organize, detect invalid files and duplicates, validate metadata, tag, filter, and track preprocessing. → *Step 5*
-
-## 3. Annotation & AI-assisted annotation
-
-Models need labels: classes, boxes, and 3D/2D segmentation masks. An existing model can *suggest* labels that a human accepts/corrects/rejects — reducing effort while keeping human oversight. → *Steps 7, 12, 15* (integrations like CVAT/FiftyOne/MONAI Label are optional extensions)
-
-## 4. Active learning
-
-Don't annotate randomly — send the model's *uncertain* cases to annotators. Feedback loop: **Data → Annotation → Model → Errors → Better data.** → *Steps 11–12*
-
-## 5. Data lineage
-
-*"Where did this image come from and what happened to it?"* — original → de-identified → resampled → QC'd → annotated → dataset v1.4 → model v2.1. → *Step 13*
-
-## 6. Dataset versioning
-
-Datasets change: v1.0 → v1.1 → v2.0. Always know exactly which version trained or validated a model. → *Step 9* (DVC/object storage are optional extensions)
-
-## 7. Quality control
-
-Automated checks for missing/corrupt files, invalid metadata, duplicates, wrong dimensions, label inconsistencies, and train/test leakage — enforced as gates before release. → *Step 8*
-
-## 8. Governance & access control
-
-RBAC, least-privilege, encryption, audit logging, retention, controlled dataset access. Example roles: Data Engineer → ingestion; Annotator → annotation; ML Engineer → training sets; QA → audit. → *Steps 6, 13, 14, 17*
-
-## 9. Regulatory support
-
-De-identification, audit trails, SOPs, validation protocols, risk assessment, change control, traceability, documentation — evidence that data was handled under control. → *Steps 6, 13, 18*
+- [ ] **Step 18 — Compliance documentation & final review**  
+  **Build:** SOP templates, risk register, audit-trail evidence samples, dataset/model cards, final README polish.  
+  **Why:** In MedTech, *evidence* is a deliverable.  
+  **Done:** A reviewer could audit our data’s journey end-to-end from the docs alone.
 
 ---
 
-# Key Technologies
+## Core Capabilities
 
-| Area | We actually use | Vision-level (mapped in Phase 6) |
-|---|---|---|
-| Language | Python 3.10 | Python (+ C++ only if a profiled hotspot demands it) |
-| Medical imaging | Pillow, NumPy | SimpleITK, ITK, OpenCV, MONAI |
-| Labels/masks | pandas, our schema | CVAT, FiftyOne, MONAI Label |
-| ML | PyTorch | PyTorch, TensorFlow |
-| Data platform | SQLite manifest, filesystem zones | DVC, S3, Glue, RDS/DynamoDB |
-| Services | FastAPI (Step 14) | API Gateway, Lambda, SageMaker |
-| Ops | pytest, GitHub Actions, Docker | CI/CD, IaC, monitoring, SLOs |
+| Capability | Description | Steps |
+|------------|-------------|-------|
+| **1. Secure ingestion** | Continuously receive imaging data with validation, integrity checks, metadata, logging, and controlled access | 2, 4, 6 |
+| **2. Data curation** | Organize, detect invalid/duplicate files, validate metadata, tag, filter, track preprocessing | 5 |
+| **3. Annotation & AI-assisted annotation** | Classes, boxes, 2D/3D segmentation. Models can suggest labels for human review | 7, 12, 15 |
+| **4. Active learning** | Send the model’s uncertain cases to annotators. Feedback loop: Data → Annotation → Model → Errors → Better data | 11–12 |
+| **5. Data lineage** | “Where did this image come from and what happened to it?” Full chain from raw → model | 13 |
+| **6. Dataset versioning** | Immutable snapshots (v1.0 → v1.1 → v2.0). Always know which version trained a model | 9 |
+| **7. Quality control** | Automated checks for missing/corrupt files, bad metadata, duplicates, leakage — enforced as gates | 8 |
+| **8. Governance & access control** | RBAC, least-privilege, encryption, audit logging, retention | 6, 13, 14, 17 |
+| **9. Regulatory support** | De-identification, audit trails, SOPs, validation protocols, risk assessment, traceability | 6, 13, 18 |
 
 ---
 
-# Architecture Concept
+## Key Technologies
+
+| Area              | We actually use                          | Vision-level (Phase 6)                          |
+|-------------------|------------------------------------------|-------------------------------------------------|
+| Language          | Python 3.10                              | Python (+ C++ only if profiled hotspot)         |
+| Medical imaging   | Pillow, NumPy                            | SimpleITK, ITK, OpenCV, MONAI                   |
+| Labels / masks    | pandas, our schema                       | CVAT, FiftyOne, MONAI Label                     |
+| ML                | PyTorch                                  | PyTorch, TensorFlow                             |
+| Data platform     | SQLite manifest, filesystem zones        | DVC, S3, Glue, RDS / DynamoDB                   |
+| Services          | FastAPI (Step 14)                        | API Gateway, Lambda, SageMaker                  |
+| Ops               | pytest, GitHub Actions, Docker           | CI/CD, IaC, monitoring, SLOs                    |
+
+---
+
+## Architecture Concept
 
 ```text
-             Medical Data Sources          (data/Patients_CT — our dataset)
-                     |
-                     v
-              Secure Ingestion             Step 4: manifest + checksums
-                     |
-          +----------+-----------+
-          |   Raw / Controlled   |         raw zone — never modified
-          +----------+-----------+
-                     |
-                     v
-             De-identification             Step 6: privacy gate
-                     |
-                     v
-               Data Curation               Step 5: curated zone + report
-                     |
-          +----------+----------+
-          |                     |
-          v                     v
-     Quality Control       Annotation      Steps 8 / 7
-          |                     |
-          +----------+----------+
-                     |
-                     v
-             Dataset Versioning            Step 9: datasets/v1.0, v1.1, ...
-                     |
-                     v
-              AI / ML Platform             Steps 10–11
-                     |
-          +----------+----------+
-          |                     |
-          v                     v
-      Training             Evaluation
-          |                     |
-          +----------+----------+
-                     |
-                     v
-             Active Learning               Step 12
-                     |
-                     v
-            New / Hard Cases  --->  back to Annotation  --->  Improved Dataset
-```
-
-Services layer (Steps 13–15) wraps all of the above: audit log, API, browser UI.
-Cloud layer (Step 17) maps each box to AWS/Azure.
-
+Medical Data Sources (data/Patients_CT)
+          │
+          ▼
+Secure Ingestion  (Step 4)  ──►  manifest + checksums
+          │
+          ▼
+     ┌────┴────┐
+     │ Raw zone │  ← never modified
+     └────┬────┘
+          ▼
+De-identification Gate  (Step 6)
+          │
+          ▼
+Data Curation  (Step 5)  ──►  curated/ zone + report
+          │
+     ┌────┴────┐
+     ▼         ▼
+Quality     Annotation
+Control     (Steps 8 / 7)
+     │         │
+     └────┬────┘
+          ▼
+Dataset Versioning  (Step 9)  ──►  datasets/v1.0, v1.1, …
+          │
+          ▼
+AI / ML Platform  (Steps 10–11)
+          │
+     ┌────┴────┐
+     ▼         ▼
+ Training   Evaluation
+     │         │
+     └────┬────┘
+          ▼
+Active Learning  (Step 12)
+          │
+          ▼
+New / Hard Cases  ──►  back to Annotation  ──►  Improved Dataset
 
 ---
 

@@ -17,6 +17,7 @@ paths:
   curated_dir: artifacts/curated          # curated zone: validated, normalized copies (never raw)
   deid_dir: artifacts/deid                # pseudonymized exports — may leave the controlled zone
   datasets_dir: datasets                  # immutable dataset releases (v1.0, v1.1, ...)
+  runs_dir: artifacts/runs                # one folder per training run: record, weights, predictions
   salt_file: .secrets/pseudonym_salt      # re-identification key: gitignored, NEVER committed
 
 dataset:
@@ -49,6 +50,16 @@ release:
   # docs/steps/step-09-dataset-versioning.md. Fracture/age/gender balance is
   # therefore REPORTED in the dataset card rather than enforced.
   stratify_by: hemorrhage
+
+training:
+  window: brain                           # hemorrhage is visible in the brain window (Step 3)
+  image_size: 128                         # 650 -> 128 keeps CPU training minutes, not hours
+  batch_size: 32
+  epochs: 15
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  dropout: 0.3
+  seed: 20260915
 
 logging:
   level: INFO                             # DEBUG while developing, INFO+ in "production"

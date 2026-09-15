@@ -14,8 +14,10 @@ import pytest
 from PIL import Image
 
 from medimageforge.config import data_path, load_config
+from medimageforge.manifest import connect
 from medimageforge.privacy import (
     ENV_SALT,
+    PATIENTS_SCHEMA,
     build_pseudonym_map,
     check_age_rule,
     export_deidentified,
@@ -224,11 +226,54 @@ def test_export_drops_the_real_id_column(tmp_path):
 # real dataset
 # ---------------------------------------------------------------------------
 
-def test_real_patients_are_all_mapped():
+def test_real_patients_are_all_mapped(tmp_path):
+    """Runs against a COPY of the manifest — never the real one.
+
+    The first version of this test called build_pseudonym_map() directly on
+    artifacts/manifest.db with the test salt. That function persists what it
+    computes, so simply running pytest overwrote the real pseudonyms and left
+    the published release unable to resolve its own image paths. A test must
+    not mutate production artifacts.
+    """
+    import shutil
+
     config = load_config()
-    db = data_path(config, "manifest_db")
-    if not db.is_file():
+    real_db = data_path(config, "manifest_db")
+    if not real_db.is_file():
         pytest.skip("run `python -m medimageforge ingest` first")
+
+    db = tmp_path / "manifest_copy.db"
+    shutil.copy(real_db, db)
+
     mapping = build_pseudonym_map(db, SALT)
     assert len(mapping) == 82
     assert len(set(mapping.values())) == 82  # no collisions
+
+
+def test_read_pseudonym_map_does_not_write(tmp_path):
+    """A reader must never modify what it reads.
+
+    Release verification used to call build_pseudonym_map(), which rebuilt and
+    overwrote the mapping — so it verified its own repair and reported PASS on
+    corrupted data. read_pseudonym_map() is the read-only path.
+    """
+    from medimageforge.privacy import read_pseudonym_map
+
+    db = tmp_path / "m.db"
+    with connect(db) as conn:
+        conn.executescript(PATIENTS_SCHEMA)
+        conn.execute(
+            "INSERT INTO patients (patient_id, pseudonym, created_at)"
+            " VALUES ('049', 'PAT-deadbeef0001', 'now')"
+        )
+        conn.commit()
+
+    before = db.read_bytes()
+    assert read_pseudonym_map(db) == {"049": "PAT-deadbeef0001"}
+    assert db.read_bytes() == before        # byte-for-byte unchanged
+
+
+def test_read_pseudonym_map_is_empty_without_the_table(tmp_path):
+    from medimageforge.privacy import read_pseudonym_map
+
+    assert read_pseudonym_map(tmp_path / "missing.db") == {}

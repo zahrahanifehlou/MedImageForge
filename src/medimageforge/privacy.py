@@ -162,12 +162,40 @@ def pseudonymize(patient_id: str, salt: bytes, length: int = 12) -> str:
     return f"PAT-{digest[:length]}"
 
 
+def read_pseudonym_map(db_path: Path) -> dict[str, str]:
+    """Read the stored mapping (real id -> pseudonym). NEVER writes.
+
+    Why this exists separately from `build_pseudonym_map`
+    ----------------------------------------------------
+    `build_pseudonym_map` persists what it computes. Anything that merely
+    needs to *look up* pseudonyms must not call it: a reader that silently
+    rewrites the table destroys its own evidence. Release verification did
+    exactly that once — it recomputed the mapping and overwrote a corrupted
+    table before checking it, so verification passed on broken data.
+
+    Consumers (training, verification) read; only the privacy command writes.
+    """
+    with connect(db_path) as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='patients'"
+        ).fetchone()
+        if not exists:
+            return {}
+        return {
+            row["patient_id"]: row["pseudonym"]
+            for row in conn.execute("SELECT patient_id, pseudonym FROM patients")
+        }
+
+
 def build_pseudonym_map(db_path: Path, salt: bytes) -> dict[str, str]:
-    """Assign (and persist) a pseudonym for every patient in the manifest.
+    """Assign (and PERSIST) a pseudonym for every patient in the manifest.
 
     The mapping lives in the manifest DB — inside the controlled zone. That
     table is precisely the re-identification path, which is what makes this
     pseudonymization rather than anonymization.
+
+    This function WRITES. Call it from the privacy gate, not from readers —
+    use `read_pseudonym_map` to look pseudonyms up.
     """
     with connect(db_path) as conn:
         conn.executescript(PATIENTS_SCHEMA)
