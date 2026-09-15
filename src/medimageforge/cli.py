@@ -10,6 +10,7 @@ Why this module exists:
 from __future__ import annotations
 
 import argparse
+import hashlib
 
 import numpy as np
 
@@ -52,6 +53,17 @@ from medimageforge.privacy import (
     scan_image_metadata,
 )
 from medimageforge.privacy import write_report as write_privacy_report
+from medimageforge.qc import run_qc
+from medimageforge.qc import write_report as write_qc_report
+from medimageforge.release import (
+    assert_no_patient_overlap,
+    build_index,
+    patient_strata,
+    split_patients,
+    split_statistics,
+    verify_release,
+    write_release,
+)
 
 log = get_logger(__name__)
 
@@ -421,6 +433,156 @@ def cmd_show_slice(config: dict, patient: str, slice_no: int) -> int:
     return 0
 
 
+def cmd_qc(config: dict, skip_leakage: bool) -> int:
+    """Run the quality gates. Non-zero exit when any ERROR is found."""
+    db_path = data_path(config, "manifest_db")
+    if not db_path.is_file():
+        print("No manifest found — run `python -m medimageforge ingest` first.")
+        return 1
+
+    report, leakage = run_qc(
+        db_path=db_path,
+        data_dir=data_path(config, "data_dir"),
+        labels=load_labels(data_path(config, "labels_csv")),
+        demographics=load_demographics(data_path(config, "demographics_csv")),
+        patient_id_width=config["dataset"]["patient_id_width"],
+        max_hamming=config["qc"]["leakage_max_hamming"],
+        min_correlation=config["qc"]["leakage_min_correlation"],
+        skip_leakage=skip_leakage,
+    )
+
+    print("=== Quality gates ===")
+    for check in report.checks:
+        print(f"  [{check['result']:4s}] {check['check']}: {check['detail']}")
+        for item in check["errors"][:10]:
+            print(f"        ERROR   {item}")
+        if len(check["errors"]) > 10:
+            print(f"        ... and {len(check['errors']) - 10} more errors")
+        for item in check["warnings"][:10]:
+            print(f"        WARNING {item}")
+        if len(check["warnings"]) > 10:
+            print(f"        ... and {len(check['warnings']) - 10} more warnings")
+
+    if leakage.get("top_candidates"):
+        # Reported for human review even when below the failure threshold:
+        # a gate is a decision, not the whole picture.
+        print("\nClosest cross-patient pairs (review candidates, not failures):")
+        for pair in leakage["top_candidates"][:5]:
+            print(f"  corr={pair['correlation']:.3f} hamming={pair['hamming']:2d}  "
+                  f"{pair['a']} vs {pair['b']}")
+        print(f"  (anatomical similarity; threshold to fail is "
+              f"{config['qc']['leakage_min_correlation']})")
+
+    print(f"\nErrors: {report.n_errors}   Warnings: {report.n_warnings}")
+    report_path = data_path(config, "artifacts_dir") / "qc_report.json"
+    write_qc_report(report, report_path)
+    print(f"JSON report: {report_path}")
+    print(f"\nGATE: {'PASS' if report.passed else 'FAIL'}")
+    return 0 if report.passed else 1
+
+
+def cmd_release(config: dict, force: bool, verify: bool) -> int:
+    """Publish (or verify) an immutable, patient-split dataset release."""
+    import datetime as _dt
+
+    version = config["release"]["version"]
+    release_dir = data_path(config, "datasets_dir") / version
+    curated_dir = data_path(config, "curated_dir")
+
+    if verify:
+        db_path = data_path(config, "manifest_db")
+        salt = load_or_create_salt(data_path(config, "salt_file"))
+        findings = verify_release(
+            release_dir, curated_dir, build_pseudonym_map(db_path, salt)
+        )
+        print(f"=== Verifying {release_dir} ===")
+        total = sum(len(v) for v in findings.values())
+        print(f"Release files modified/missing: {len(findings['release_files'])}")
+        print(f"Referenced images drifted:      {len(findings['referenced_images'])}")
+        print(f"Real patient IDs leaked:        {len(findings['privacy'])}")
+        for item in (
+            findings["release_files"] + findings["referenced_images"] + findings["privacy"]
+        )[:10]:
+            print(f"  - {item}")
+        print(f"\nVERIFY: {'PASS' if total == 0 else 'FAIL'}")
+        return 0 if total == 0 else 1
+
+    db_path = data_path(config, "manifest_db")
+    if not db_path.is_file():
+        print("No manifest found — run `python -m medimageforge ingest` first.")
+        return 1
+    if release_dir.exists() and not force:
+        print(f"{release_dir} already exists. A published release is immutable.")
+        print("Bump release.version in the config, or pass --force to replace it.")
+        return 1
+
+    labels_csv = data_path(config, "labels_csv")
+    labels = load_labels(labels_csv)
+    width = config["dataset"]["patient_id_width"]
+
+    # Pseudonyms come from Step 6: a release leaves the controlled zone.
+    salt = load_or_create_salt(data_path(config, "salt_file"))
+    pseudonyms = build_pseudonym_map(db_path, salt)
+
+    strata = patient_strata(labels, width)
+    assignment = split_patients(
+        strata,
+        config["release"]["ratios"],
+        config["release"]["seed"],
+        config["release"]["stratify_by"],
+    )
+    assert_no_patient_overlap(assignment)
+
+    index = build_index(db_path, assignment, pseudonyms, labels, width)
+    if index.empty:
+        print("No curated files found — run `python -m medimageforge curate` first.")
+        return 1
+    stats = split_statistics(index, strata, assignment)
+
+    metadata = {
+        "version": version,
+        "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "code_version": __version__,
+        "seed": config["release"]["seed"],
+        "ratios": config["release"]["ratios"],
+        "stratify_by": config["release"]["stratify_by"],
+        "labels_file": labels_csv.name,
+        "labels_sha256": hashlib.sha256(labels_csv.read_bytes()).hexdigest(),
+        "total_patients": len(assignment),
+        "total_images": int(len(index)),
+    }
+    # Carried forward from the Step 8 QC report so a reader of the release
+    # learns about them without having to dig through our artifacts.
+    known_issues = [
+        "Patient 084 has 36 brain slices but only 35 bone slices (slice 36 has "
+        "no bone counterpart). Brain-window models are unaffected.",
+        "Three patients are under 1 year old (the youngest ~1 day). Genuine "
+        "data, but paediatric anatomy differs substantially from adult.",
+        "Class imbalance: roughly 13% of brain slices show a hemorrhage.",
+        "Masks were recovered from JPEG and thresholded to binary in curation; "
+        "boundaries are approximate at the pixel level.",
+        "Labels are a two-radiologist consensus with no inter-rater "
+        "disagreement recorded, so annotation uncertainty cannot be estimated.",
+    ]
+
+    summary = write_release(
+        release_dir, index, assignment, pseudonyms, stats, metadata, known_issues
+    )
+
+    print(f"=== Released {version} ===")
+    print(f"{'split':12s} {'patients':>8s} {'w/ HGE':>7s} {'images':>7s} "
+          f"{'brain':>6s} {'HGE slices':>10s} {'rate':>6s}")
+    for split in ("train", "validation", "test"):
+        s = stats[split]
+        print(f"{split:12s} {s['patients']:8d} {s['patients_with_hemorrhage']:7d} "
+              f"{s['images']:7d} {s['brain_slices']:6d} {s['hemorrhage_slices']:10d} "
+              f"{s['hemorrhage_rate']:6.3f}")
+    print(f"\nNo patient appears in two splits (verified).")
+    print(f"Files: {', '.join(summary.files)}")
+    print(f"Location: {release_dir}  (written read-only)")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="medimageforge")
     parser.add_argument(
@@ -460,6 +622,23 @@ def main() -> int:
     )
     p_show.add_argument("patient", help="Patient folder name, e.g. 049")
     p_show.add_argument("slice_no", type=int, help="Slice number, e.g. 14")
+    p_qc = sub.add_parser("qc", help="Run automated quality gates")
+    p_qc.add_argument(
+        "--skip-leakage",
+        action="store_true",
+        help="Skip perceptual-hash leakage detection (the slow check)",
+    )
+    p_release = sub.add_parser(
+        "release", help="Publish an immutable, patient-split dataset version"
+    )
+    p_release.add_argument(
+        "--force", action="store_true", help="Replace an existing release (normally refused)"
+    )
+    p_release.add_argument(
+        "--verify",
+        action="store_true",
+        help="Verify an existing release against its checksums and the curated zone",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -482,6 +661,10 @@ def main() -> int:
         return cmd_load_labels(config)
     if args.command == "show-slice":
         return cmd_show_slice(config, args.patient, args.slice_no)
+    if args.command == "qc":
+        return cmd_qc(config, args.skip_leakage)
+    if args.command == "release":
+        return cmd_release(config, args.force, args.verify)
     return 1
 
 

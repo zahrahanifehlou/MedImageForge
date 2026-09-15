@@ -105,12 +105,12 @@ Six phases, eighteen steps. Checkboxes track our progress.
   - **Why:** Labels are data too. Schema-before-storage is the lesson: five boolean columns in a CSV become a well-defined label taxonomy.
   - **Done:** For any slice we can query "labels + mask path + provenance" in one call.
 
-- [ ] **Step 8 — Automated quality gates**
+- [x] **Step 8 — Automated quality gates**
   - **Build:** A QC suite: image/label count mismatches, orphan files, mask-without-hemorrhage-flag inconsistencies, near-duplicate slices across different patients (leakage!), demographic outliers. Pass/fail quality report.
   - **Why:** A dataset must **earn** its way to training. Quality gates are the difference between a data lake and a data swamp.
   - **Done:** Report catches at least one real inconsistency in the raw data (this dataset has some — e.g., labels referencing missing slices).
 
-- [ ] **Step 9 — Dataset versioning**
+- [x] **Step 9 — Dataset versioning**
   - **Build:** Patient-level train/validation/test split, then an immutable snapshot `datasets/v1.0/` containing the split, an index of files, and a **dataset card** (what's inside, counts, known issues).
   - **Why:** Reproducibility — *"which data trained this model?"* must always be answerable. Splitting **by patient** (not by slice) is the single most important anti-leakage rule in medical imaging.
   - **Done:** `v1.0` is reproducible from the manifest; no patient appears in two splits.
