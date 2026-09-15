@@ -15,6 +15,11 @@ import numpy as np
 
 from medimageforge import __version__
 from medimageforge.config import data_path, load_config
+from medimageforge.annotations import (
+    get_slice_annotation,
+    label_distribution,
+    load_annotations,
+)
 from medimageforge.curate import curate, curation_state, write_report
 from medimageforge.explore import (
     LABEL_COLUMNS,
@@ -34,6 +39,19 @@ from medimageforge.imaging import (
 )
 from medimageforge.logging_utils import configure_logging, get_logger
 from medimageforge.manifest import ingest
+from medimageforge.privacy import (
+    PrivacyReport,
+    build_pseudonym_map,
+    check_age_rule,
+    export_deidentified,
+    find_id_leaks,
+    load_or_create_salt,
+    pseudonymize_frames,
+    scan_columns,
+    scan_free_text,
+    scan_image_metadata,
+)
+from medimageforge.privacy import write_report as write_privacy_report
 
 log = get_logger(__name__)
 
@@ -254,6 +272,155 @@ def cmd_curate(config: dict, force: bool) -> int:
     return 0
 
 
+def cmd_privacy(config: dict, sample: int) -> int:
+    """Run the privacy gate, then pseudonymize the working artifacts.
+
+    Returns non-zero when the gate fails — that is what makes it a gate and
+    not a report: a CI job or a later pipeline step can simply check the
+    exit code and refuse to continue.
+    """
+    db_path = data_path(config, "manifest_db")
+    if not db_path.is_file():
+        print("No manifest found — run `python -m medimageforge ingest` first.")
+        return 1
+
+    raw_dir = data_path(config, "raw_dir")
+    labels = load_labels(data_path(config, "labels_csv"))
+    demographics = load_demographics(data_path(config, "demographics_csv"))
+    report = PrivacyReport()
+
+    # --- 1. PHI must not hide in image metadata --------------------------
+    images = sorted(raw_dir.rglob("*.jpg"))
+    scanned = images if sample <= 0 else images[:sample]
+    findings = scan_image_metadata(scanned)
+    report.add(
+        "image-metadata",
+        not findings,
+        f"scanned {len(scanned)} images for EXIF/comment segments",
+        findings,
+    )
+
+    # --- 2. No column may hold a direct identifier -----------------------
+    col_findings = scan_columns(labels, "hemorrhage_diagnosis.csv") + scan_columns(
+        demographics, "patient_demographics.csv"
+    )
+    report.add(
+        "identifier-columns",
+        not col_findings,
+        "checked column names against the forbidden-identifier list",
+        col_findings,
+    )
+
+    # --- 3. Free text must not contain identifiers -----------------------
+    text_findings = scan_free_text(labels, "hemorrhage_diagnosis.csv") + scan_free_text(
+        demographics, "patient_demographics.csv"
+    )
+    report.add(
+        "free-text-identifiers",
+        not text_findings,
+        "regex-scanned every string cell for emails/phones/dates/names",
+        text_findings,
+    )
+
+    # --- 4. HIPAA Safe Harbor age rule -----------------------------------
+    age_findings = check_age_rule(demographics, "patient_demographics.csv")
+    report.add(
+        "age-over-89",
+        not age_findings,
+        "ages above 89 must be grouped, not reported exactly",
+        age_findings,
+    )
+
+    # --- 5. Pseudonymize, then prove the export is clean ------------------
+    salt = load_or_create_salt(data_path(config, "salt_file"))
+    mapping = build_pseudonym_map(db_path, salt)
+    items = pseudonymize_frames(
+        labels, demographics, mapping, config["dataset"]["patient_id_width"]
+    )
+    leak_findings = []
+    for item in items:
+        for finding in find_id_leaks(item["frame"], item["real_ids"]):
+            leak_findings.append({"source": item["name"], **finding})
+    report.add(
+        "no-real-ids-in-exports",
+        not leak_findings,
+        f"row-aligned check that no column in {len(items)} exports reproduces a patient ID",
+        leak_findings,
+    )
+    exported = export_deidentified(items, data_path(config, "deid_dir"))
+
+    print("=== Privacy gate ===")
+    for check in report.checks:
+        print(f"  [{check['result']}] {check['check']}: {check['detail']}")
+        for item in check["findings"][:5]:
+            print(f"        - {item}")
+        if len(check["findings"]) > 5:
+            print(f"        ... and {len(check['findings']) - 5} more")
+
+    print(f"\nPatients pseudonymized: {len(mapping)}")
+    example = sorted(mapping)[0]
+    print(f"  example: {example} -> {mapping[example]}")
+    print("De-identified exports:")
+    for path in exported:
+        print(f"  {path}")
+
+    report_path = data_path(config, "artifacts_dir") / "privacy_report.json"
+    write_privacy_report(report, report_path)
+    print(f"\nJSON report: {report_path}")
+    print(f"\nGATE: {'PASS' if report.passed else 'FAIL'}")
+    return 0 if report.passed else 1
+
+
+def cmd_load_labels(config: dict) -> int:
+    """Translate the wide labels CSV into the normalized label store."""
+    db_path = data_path(config, "manifest_db")
+    if not db_path.is_file():
+        print("No manifest found — run `python -m medimageforge ingest` first.")
+        return 1
+
+    labels_csv = data_path(config, "labels_csv")
+    report = load_annotations(
+        db_path,
+        load_labels(labels_csv),
+        labels_csv,
+        config["dataset"]["patient_id_width"],
+    )
+    print("=== Label store loaded ===")
+    print(f"Slice annotations: {report.annotations}")
+    print(f"Label assertions:  {report.labels}")
+    print(f"With mask:         {report.with_mask}")
+    print(f"Hemorrhage-positive slices: {report.positive_slices}")
+
+    print("\nLabel distribution (from the store, not the CSV):")
+    for row in label_distribution(db_path):
+        print(f"  [{row['category']:16s}] {row['display_name']:16s} "
+              f"{row['positives']:5d} / {row['total']}")
+    return 0
+
+
+def cmd_show_slice(config: dict, patient: str, slice_no: int) -> int:
+    """One call: labels + mask path + provenance for a single slice."""
+    db_path = data_path(config, "manifest_db")
+    records = get_slice_annotation(db_path, patient, slice_no)
+    if not records:
+        print(f"No annotation found for patient {patient} slice {slice_no}.")
+        return 1
+
+    for record in records:
+        print(f"=== Patient {record['patient_id']} slice {record['slice_no']} ===")
+        print(f"Hemorrhage types: {record['hemorrhage_types'] or '(none)'}")
+        print(f"Other findings:   "
+              f"{[c for c in record['positive_labels'] if c not in record['hemorrhage_types']] or '(none)'}")
+        print(f"No hemorrhage (derived): {record['no_hemorrhage']}")
+        print(f"Mask: {record['mask_rel_path'] or '(none)'}")
+        print("Provenance:")
+        for key, value in record["provenance"].items():
+            shown = value[:16] + "..." if key == "source_sha256" else value
+            print(f"  {key}: {shown}")
+        print(f"All labels: {record['labels']}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="medimageforge")
     parser.add_argument(
@@ -276,6 +443,23 @@ def main() -> int:
     p_curate.add_argument(
         "--force", action="store_true", help="Re-curate files even if already done"
     )
+    p_privacy = sub.add_parser(
+        "privacy", help="Run the PHI gate and pseudonymize working artifacts"
+    )
+    p_privacy.add_argument(
+        "--sample",
+        type=int,
+        default=0,
+        help="Scan only the first N images for metadata (0 = all)",
+    )
+    sub.add_parser(
+        "load-labels", help="Load the labels CSV into the normalized label store"
+    )
+    p_show = sub.add_parser(
+        "show-slice", help="Show labels + mask + provenance for one slice"
+    )
+    p_show.add_argument("patient", help="Patient folder name, e.g. 049")
+    p_show.add_argument("slice_no", type=int, help="Slice number, e.g. 14")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -292,6 +476,12 @@ def main() -> int:
         return cmd_ingest(config)
     if args.command == "curate":
         return cmd_curate(config, args.force)
+    if args.command == "privacy":
+        return cmd_privacy(config, args.sample)
+    if args.command == "load-labels":
+        return cmd_load_labels(config)
+    if args.command == "show-slice":
+        return cmd_show_slice(config, args.patient, args.slice_no)
     return 1
 
 

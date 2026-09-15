@@ -6,6 +6,9 @@ artifacts/
 datasets/
 curated/
 
+# Secrets — the pseudonymization salt is a re-identification key
+.secrets/
+
 # Python
 .venv/
 __pycache__/

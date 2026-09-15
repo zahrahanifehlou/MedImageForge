@@ -91,7 +91,7 @@ Six phases, eighteen steps. Checkboxes track our progress.
   - **Why:** Learn **zone separation** (raw vs curated — never edit raw data in place) and **idempotent, resumable** pipelines.
   - **Done:** Curated zone contains only validated files; the report lists every rejection with a reason.
 
-- [ ] **Step 6 — Privacy & de-identification gate**
+- [x] **Step 6 — Privacy & de-identification gate**
   - **Build:** A check that verifies no PHI exists in our files (already anonymized JPGs — we prove it), plus pseudonymization of patient IDs in all *working* artifacts (e.g., `049` → `PAT-a3f9…`).
   - **Why:** Learn the difference between **anonymization** and **pseudonymization**, and why privacy is a *gate* that must pass before anything downstream runs.
   - **Done:** Gate produces a pass/fail privacy report; working artifacts contain no real patient numbers.
@@ -100,7 +100,7 @@ Six phases, eighteen steps. Checkboxes track our progress.
 
 *Goal: labels become first-class data, datasets become reproducible releases.*
 
-- [ ] **Step 7 — Annotation model & label store**
+- [x] **Step 7 — Annotation model & label store**
   - **Build:** A clean annotation schema (per-slice multi-label classification + segmentation mask reference) loaded into the manifest DB, with **provenance** (which source CSV, whose annotation).
   - **Why:** Labels are data too. Schema-before-storage is the lesson: five boolean columns in a CSV become a well-defined label taxonomy.
   - **Done:** For any slice we can query "labels + mask path + provenance" in one call.
