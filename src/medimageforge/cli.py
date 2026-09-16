@@ -649,6 +649,117 @@ def cmd_train(config: dict, epochs: int | None) -> int:
     return 0 if beats else 1
 
 
+def cmd_evaluate(config: dict, run_id: str | None, split: str, top_n: int | None) -> int:
+    """Analyse an existing run's predictions. Read-only: nothing is re-tuned."""
+    from medimageforge.evaluate import (
+        evaluate_run,
+        find_latest_run,
+        render_hardest_cases,
+        write_report,
+    )
+
+    runs_dir = data_path(config, "runs_dir")
+    if not runs_dir.is_dir():
+        print("No runs found — run `python -m medimageforge train` first.")
+        return 1
+    run_dir = runs_dir / run_id if run_id else find_latest_run(runs_dir)
+    if not (run_dir / "run.json").is_file():
+        print(f"No run.json in {run_dir}")
+        return 1
+
+    settings = config["evaluation"]
+    report = evaluate_run(
+        run_dir=run_dir,
+        release_dir=data_path(config, "datasets_dir") / config["release"]["version"],
+        split=split,
+        top_n=top_n if top_n is not None else settings["top_n"],
+        target_recall=settings["high_sensitivity_recall"],
+        bootstrap_resamples=settings["bootstrap_resamples"],
+    )
+
+    slice_m = report["slice_level"]
+    ci = slice_m["auroc_ci"]
+    print(f"=== Evaluation of {report['run_id']} ({report['split']} split) ===")
+    print(f"dataset {report['dataset_version']}   threshold {report['threshold']:.3f} "
+          f"({report['threshold_source']})")
+    print(f"\nslice level: AUROC {slice_m['auroc']:.4f} "
+          f"[{ci['ci_low']:.3f}, {ci['ci_high']:.3f}]  recall {slice_m['recall']:.3f}  "
+          f"precision {slice_m['precision']:.3f}")
+
+    print("\n--- per subtype: what can actually be measured ---")
+    for row in report["per_subtype"]:
+        recall = "  n/a" if row["recall"] is None else f"{row['recall']:.3f}"
+        flag = "" if row["measurable"] else "  <-- NOT MEASURABLE"
+        print(f"  {row['subtype']:18s} support {row['support']:3d}  recall {recall}{flag}")
+        if row["note"]:
+            print(f"      {row['note']}")
+
+    print("\n--- patient level (a radiologist reads a scan, not a slice) ---")
+    for rule in ("max", "topk"):
+        block = report["patient_level"][rule]
+        m = block["metrics"]
+        print(f"  {rule:5s} rule: AUROC {m['auroc']:.4f} "
+              f"[{m['auroc_ci']['ci_low']:.3f}, {m['auroc_ci']['ci_high']:.3f}]  "
+              f"recall {m['recall']:.3f}  precision {m['precision']:.3f}")
+    block = report["patient_level"]["max"]
+    print(f"  {block['n_positive_patients']} positive / {block['n_negative_patients']} "
+          f"negative patients = {block['comparable_pairs']} pairs, so patient AUROC "
+          f"moves in steps of {block['auroc_granularity']:.3f}")
+
+    print("\n--- per-patient concentration and detection rate ---")
+    for row in report["patient_contributions"]:
+        if row["positive_slices"]:
+            print(f"  {row['patient']}: {row['positive_slices']:2d} positive "
+                  f"({row['share_of_all_positives']:5.1%} of all)  "
+                  f"detected {row['detected']:2d}  recall {row['detection_rate']:.2f}")
+    print("  performance is clustered by patient — slice-level explanations are")
+    print("  confounded with patient identity at this sample size")
+
+    print("\n--- leave-one-patient-out (does one patient carry the score?) ---")
+    for row in report["leave_one_patient_out"][:3]:
+        if row["auroc_without"] is None:
+            print(f"  drop {row['excluded_patient']}: {row['note']}")
+        else:
+            print(f"  drop {row['excluded_patient']}: AUROC {row['auroc_without']:.4f} "
+                  f"({row['delta']:+.4f})")
+
+    sweep = report["threshold_sweep"]
+    print(f"\n--- operating point for recall >= {sweep['target_recall']:.2f} ---")
+    if sweep["achievable"]:
+        p = sweep["high_sensitivity_point"]
+        print(f"  threshold {p['threshold']:.3f} -> recall {p['recall']:.3f}, "
+              f"precision {p['precision']:.3f}, {p['fp']} false alarms, {p['fn']} missed")
+    else:
+        print("  not achievable at any threshold")
+
+    print("\n--- hardest cases (named, for human review) ---")
+    for row in report["hardest_cases"]["false_negatives"][:5]:
+        subtypes = ", ".join(row["subtypes"]) or "-"
+        print(f"  MISSED      {row['patient']} slice {row['slice_no']:3d} "
+              f"score {row['score']:.4f}  [{subtypes}]")
+    for row in report["hardest_cases"]["false_positives"][:3]:
+        print(f"  FALSE ALARM {row['patient']} slice {row['slice_no']:3d} "
+              f"score {row['score']:.4f}")
+
+    out_dir = data_path(config, "eval_dir") / report["run_id"]
+    json_path, md_path = write_report(report, out_dir)
+    # load_pseudonym_map returns pseudonym -> real id, which is the direction
+    # the renderer needs. read_pseudonym_map returns the inverse; passing that
+    # by mistake silently resolved nothing and wrote zero images.
+    from medimageforge.data import load_pseudonym_map
+
+    images = render_hardest_cases(
+        report["hardest_cases"],
+        load_pseudonym_map(data_path(config, "manifest_db")),
+        data_path(config, "curated_dir"),
+        out_dir / "hardest",
+    )
+    print(f"\nReport: {md_path}")
+    print(f"JSON:   {json_path}")
+    print(f"Images: {len(images)} written to {out_dir / 'hardest'}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="medimageforge")
     parser.add_argument(
@@ -709,6 +820,16 @@ def main() -> int:
     p_train.add_argument(
         "--epochs", type=int, default=None, help="Override the configured epoch count"
     )
+    p_eval = sub.add_parser(
+        "evaluate", help="Error analysis of a training run (read-only)"
+    )
+    p_eval.add_argument("--run", default=None, help="Run id (default: the latest run)")
+    p_eval.add_argument(
+        "--split", default="test", choices=["test", "validation"], help="Split to analyse"
+    )
+    p_eval.add_argument(
+        "--top-n", type=int, default=None, help="How many worst mistakes to list"
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -737,6 +858,8 @@ def main() -> int:
         return cmd_release(config, args.force, args.verify)
     if args.command == "train":
         return cmd_train(config, args.epochs)
+    if args.command == "evaluate":
+        return cmd_evaluate(config, args.run, args.split, args.top_n)
     return 1
 
 

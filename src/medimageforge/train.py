@@ -262,9 +262,11 @@ def run_training(
         test_labels=test_labels,
         test_scores=test_scores,
         test_patients=np.array(datasets["test"].patients),
+        test_slices=np.array(datasets["test"].slice_numbers),
         val_labels=val_labels,
         val_scores=val_scores,
         val_patients=np.array(datasets["validation"].patients),
+        val_slices=np.array(datasets["validation"].slice_numbers),
     )
     log.info("run record written to %s", run_dir)
     return record

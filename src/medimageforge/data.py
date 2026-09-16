@@ -97,7 +97,8 @@ class SliceDataset(Dataset):
         paths: list[Path],
         labels: np.ndarray,
         patients: list[str],
-        image_size: int,
+        slice_numbers: list[int] | None = None,
+        image_size: int = 128,
         normalization: Normalization | None = None,
         augment: bool = False,
         seed: int = 0,
@@ -105,6 +106,13 @@ class SliceDataset(Dataset):
         self.paths = paths
         self.labels = labels.astype(np.float32)
         self.patients = patients
+        # Slice numbers are carried alongside patients so a prediction can be
+        # traced back to a specific image. Without them, error analysis can
+        # only say "some slice of this patient was wrong", and predictions
+        # cannot be joined to per-subtype labels in the release index.
+        self.slice_numbers = (
+            list(slice_numbers) if slice_numbers is not None else list(range(len(paths)))
+        )
         self.image_size = image_size
         self.normalization = normalization
         self.augment = augment
@@ -161,6 +169,7 @@ def build_datasets(
             paths=resolve_paths(subset, pseudonym_map, curated_dir),
             labels=subset["hemorrhage"].to_numpy(),
             patients=subset["patient"].tolist(),
+            slice_numbers=subset["slice_no"].tolist(),
             image_size=image_size,
             augment=(split == "train"),
             seed=seed,

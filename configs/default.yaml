@@ -18,6 +18,7 @@ paths:
   deid_dir: artifacts/deid                # pseudonymized exports — may leave the controlled zone
   datasets_dir: datasets                  # immutable dataset releases (v1.0, v1.1, ...)
   runs_dir: artifacts/runs                # one folder per training run: record, weights, predictions
+  eval_dir: artifacts/eval                # per-run evaluation reports and error-analysis images
   salt_file: .secrets/pseudonym_salt      # re-identification key: gitignored, NEVER committed
 
 dataset:
@@ -60,6 +61,13 @@ training:
   weight_decay: 0.0001
   dropout: 0.3
   seed: 20260915
+
+evaluation:
+  top_n: 8                                # how many worst mistakes to list and render
+  # A missed hemorrhage is far costlier than a false alarm, so we also report the
+  # operating point that reaches this recall — whatever precision it costs.
+  high_sensitivity_recall: 0.90
+  bootstrap_resamples: 2000
 
 logging:
   level: INFO                             # DEBUG while developing, INFO+ in "production"

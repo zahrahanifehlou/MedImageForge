@@ -152,7 +152,7 @@ Six phases • Eighteen steps. Checkboxes track progress.
   **Why:** Dataset → DataLoader → model → metrics chain. Experiment records must reference a *dataset version*.  
   **Done:** Model trains and beats a trivial baseline; run record is complete.
 
-- [ ] **Step 11 — Evaluation & error analysis**  
+- [x] **Step 11 — Evaluation & error analysis**  
   **Build:** Per-class metrics, confusion matrix, hardest slices, patient-level aggregation.  
   **Why:** Aggregate metrics lie. Patient-level metrics are the honest number.  
   **Done:** We can name the specific slices/patients the model fails on.
