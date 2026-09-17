@@ -157,7 +157,7 @@ Six phases • Eighteen steps. Checkboxes track progress.
   **Why:** Aggregate metrics lie. Patient-level metrics are the honest number.  
   **Done:** We can name the specific slices/patients the model fails on.
 
-- [ ] **Step 12 — Active learning loop**  
+- [x] **Step 12 — Active learning loop**  
   **Build:** Score by uncertainty → queue hard cases → simulate reviewer → release `datasets/v1.1` → retrain → compare.  
   **Why:** Closes the central loop: **Data → Model → Errors → Better data → Better model**.  
   **Done:** Documented before/after comparison on the same test split.

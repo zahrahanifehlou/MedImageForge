@@ -13,6 +13,7 @@ import argparse
 import hashlib
 
 import numpy as np
+import pandas as pd
 
 from medimageforge import __version__
 from medimageforge.config import data_path, load_config
@@ -760,8 +761,15 @@ def cmd_evaluate(config: dict, run_id: str | None, split: str, top_n: int | None
     return 0
 
 
-def cmd_active_learning(config: dict, seeds: int, budget: int, publish: bool) -> int:
-    """Run the active-learning experiment and optionally publish v1.1."""
+def cmd_active_learning(
+    config: dict, seeds: int, budget: int, publish: bool, from_report: bool
+) -> int:
+    """Run the active-learning experiment and optionally publish v1.1.
+
+    `from_report` reuses a saved experiment instead of recomputing it: the
+    experiment costs 24 trainings, and publishing a release from its result
+    should not require paying that again.
+    """
     import datetime as _dt
     import json as _json
 
@@ -788,17 +796,25 @@ def cmd_active_learning(config: dict, seeds: int, budget: int, publish: bool) ->
     )
 
     work_dir = data_path(config, "artifacts_dir") / "active"
-    report = run_experiment(
-        base_release=base_release,
-        db_path=data_path(config, "manifest_db"),
-        curated_dir=data_path(config, "curated_dir"),
-        work_dir=work_dir,
-        training_config=training_config,
-        seed_fraction=settings["seed_fraction"],
-        budget=budget if budget else settings["budget"],
-        seeds=tuple(range(seeds if seeds else settings["seeds"])),
-        uncertainty_rule=settings["uncertainty_rule"],
-    )
+    cached = work_dir / "experiment.json"
+    if from_report:
+        if not cached.is_file():
+            print(f"No saved experiment at {cached} — run without --from-report first.")
+            return 1
+        report = _json.loads(cached.read_text(encoding="utf-8"))
+        print(f"Reusing saved experiment from {cached}")
+    else:
+        report = run_experiment(
+            base_release=base_release,
+            db_path=data_path(config, "manifest_db"),
+            curated_dir=data_path(config, "curated_dir"),
+            work_dir=work_dir,
+            training_config=training_config,
+            seed_fraction=settings["seed_fraction"],
+            budget=budget if budget else settings["budget"],
+            seeds=tuple(range(seeds if seeds else settings["seeds"])),
+            uncertainty_rule=settings["uncertainty_rule"],
+        )
 
     print("=== Active learning experiment ===")
     print(f"base {base_release.name} | seed pool {settings['seed_fraction']:.0%} of train "
@@ -848,11 +864,11 @@ def cmd_active_learning(config: dict, seeds: int, budget: int, publish: bool) ->
         print(f"  {strategy:12s} {len(picked)} patients, {positives} with hemorrhage")
     print(f"  overlap between strategies: {len(first['overlap_between_strategies'])} patients")
 
-    out_dir = data_path(config, "artifacts_dir") / "active"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "experiment.json").write_text(_json.dumps(report, indent=2), encoding="utf-8")
-    (out_dir / "experiment.md").write_text(render_active(report), encoding="utf-8")
-    print(f"\nReport: {out_dir / 'experiment.md'}")
+    work_dir.mkdir(parents=True, exist_ok=True)
+    if not from_report:
+        cached.write_text(_json.dumps(report, indent=2), encoding="utf-8")
+    (work_dir / "experiment.md").write_text(render_active(report), encoding="utf-8")
+    print(f"\nReport: {work_dir / 'experiment.md'}")
 
     if publish:
         # Publish the uncertainty-selected pool from seed 0 as v1.1: the
@@ -994,6 +1010,11 @@ def main() -> int:
     p_active.add_argument(
         "--publish", action="store_true", help="Publish the adopted pool as v1.1"
     )
+    p_active.add_argument(
+        "--from-report",
+        action="store_true",
+        help="Reuse the saved experiment instead of retraining everything",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -1025,7 +1046,9 @@ def main() -> int:
     if args.command == "evaluate":
         return cmd_evaluate(config, args.run, args.split, args.top_n)
     if args.command == "active-learning":
-        return cmd_active_learning(config, args.seeds, args.budget, args.publish)
+        return cmd_active_learning(
+            config, args.seeds, args.budget, args.publish, args.from_report
+        )
     return 1
 
 
