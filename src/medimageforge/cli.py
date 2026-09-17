@@ -760,6 +760,161 @@ def cmd_evaluate(config: dict, run_id: str | None, split: str, top_n: int | None
     return 0
 
 
+def cmd_active_learning(config: dict, seeds: int, budget: int, publish: bool) -> int:
+    """Run the active-learning experiment and optionally publish v1.1."""
+    import datetime as _dt
+    import json as _json
+
+    from medimageforge.active import render_markdown as render_active
+    from medimageforge.active import restrict_train_patients, run_experiment
+    from medimageforge.train import TrainingConfig
+
+    base_release = data_path(config, "datasets_dir") / config["release"]["version"]
+    if not (base_release / "index.csv").is_file():
+        print(f"No base release at {base_release} — run `release` first.")
+        return 1
+
+    settings = config["active_learning"]
+    training = config["training"]
+    training_config = TrainingConfig(
+        image_size=training["image_size"],
+        batch_size=training["batch_size"],
+        epochs=training["epochs"],
+        learning_rate=training["learning_rate"],
+        weight_decay=training["weight_decay"],
+        dropout=training["dropout"],
+        seed=training["seed"],
+        window=training["window"],
+    )
+
+    work_dir = data_path(config, "artifacts_dir") / "active"
+    report = run_experiment(
+        base_release=base_release,
+        db_path=data_path(config, "manifest_db"),
+        curated_dir=data_path(config, "curated_dir"),
+        work_dir=work_dir,
+        training_config=training_config,
+        seed_fraction=settings["seed_fraction"],
+        budget=budget if budget else settings["budget"],
+        seeds=tuple(range(seeds if seeds else settings["seeds"])),
+        uncertainty_rule=settings["uncertainty_rule"],
+    )
+
+    print("=== Active learning experiment ===")
+    print(f"base {base_release.name} | seed pool {settings['seed_fraction']:.0%} of train "
+          f"| budget {report['config']['budget']} patients | "
+          f"{len(report['config']['seeds'])} seeds")
+
+    print(f"\n{'seed':>4s} {'arm':12s} {'patients':>8s} {'slices':>7s} "
+          f"{'test AUROC':>10s} {'95% CI':>18s}")
+    for row in report["results"]:
+        ci = row["test_auroc_ci"]
+        print(f"{row['seed']:4d} {row['arm']:12s} {row['n_train_patients']:8d} "
+              f"{row['n_train_slices']:7d} {row['test_auroc']:10.4f} "
+              f"  [{ci['ci_low']:.3f}, {ci['ci_high']:.3f}]")
+
+    print(f"\n{'arm':12s} {'mean AUROC':>10s} {'std':>8s} {'min':>8s} {'max':>8s}")
+    for arm in ("seed", "uncertainty", "random"):
+        s = report["summary"].get(arm)
+        if not s:
+            continue
+        std = "   n/a" if s["std_test_auroc"] is None else f"{s['std_test_auroc']:8.4f}"
+        print(f"{arm:12s} {s['mean_test_auroc']:10.4f} {std} "
+              f"{s['min_test_auroc']:8.4f} {s['max_test_auroc']:8.4f}")
+
+    print("\n--- paired comparisons (pairing by seed) ---")
+    for name in ("uncertainty_vs_random", "uncertainty_vs_seed", "random_vs_seed"):
+        block = report["summary"].get(name)
+        if not block or block.get("ci_low") is None:
+            continue
+        verdict = "SIGNIFICANT" if block["significant"] else "not significant"
+        print(f"  {name.replace('_', ' '):26s} mean {block['mean_delta']:+.4f}  "
+              f"95% CI [{block['ci_low']:+.4f}, {block['ci_high']:+.4f}]  "
+              f"{block['wins']}W/{block['losses']}L  {verdict}")
+
+    comparison = report["summary"].get("uncertainty_vs_random")
+    if comparison and comparison.get("ci_low") is not None:
+        print(f"\n  deltas: {comparison['paired_deltas']}")
+        print(f"  this experiment could only detect an effect of "
+              f">= {comparison['minimum_detectable_effect']:.3f} AUROC")
+        if not comparison["significant"]:
+            print("  => cannot distinguish uncertainty sampling from random selection")
+            print("     on this dataset. A power problem, not proof of no effect.")
+
+    print("\n--- what each strategy chose (seed 0) ---")
+    first = report["details"][0]
+    for strategy, picked in first["selections"].items():
+        positives = first["positive_patients_selected"][strategy]
+        print(f"  {strategy:12s} {len(picked)} patients, {positives} with hemorrhage")
+    print(f"  overlap between strategies: {len(first['overlap_between_strategies'])} patients")
+
+    out_dir = data_path(config, "artifacts_dir") / "active"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "experiment.json").write_text(_json.dumps(report, indent=2), encoding="utf-8")
+    (out_dir / "experiment.md").write_text(render_active(report), encoding="utf-8")
+    print(f"\nReport: {out_dir / 'experiment.md'}")
+
+    if publish:
+        # Publish the uncertainty-selected pool from seed 0 as v1.1: the
+        # dataset a team would actually adopt after one annotation round.
+        version = settings["next_version"]
+        release_dir = data_path(config, "datasets_dir") / version
+        if release_dir.exists():
+            print(f"\n{release_dir} already exists — a published release is immutable.")
+            return 0
+
+        labelled = set(first["labelled_pool"]) | set(first["selections"]["uncertainty"])
+        index = pd.read_csv(base_release / "index.csv")
+        subset = restrict_train_patients(index, labelled)
+
+        labels = load_labels(data_path(config, "labels_csv"))
+        width = config["dataset"]["patient_id_width"]
+        strata = patient_strata(labels, width)
+        pseudonyms = read_pseudonym_map(data_path(config, "manifest_db"))
+        reverse = {v: k for k, v in pseudonyms.items()}
+        assignment = {
+            reverse[row.patient]: row.split
+            for row in subset[["patient", "split"]].drop_duplicates().itertuples(index=False)
+            if row.patient in reverse
+        }
+        stats = split_statistics(subset, strata, assignment)
+        metadata = {
+            "version": version,
+            "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+            "code_version": __version__,
+            "seed": config["release"]["seed"],
+            "ratios": config["release"]["ratios"],
+            "stratify_by": config["release"]["stratify_by"],
+            "labels_file": data_path(config, "labels_csv").name,
+            "labels_sha256": hashlib.sha256(
+                data_path(config, "labels_csv").read_bytes()
+            ).hexdigest(),
+            "derived_from": config["release"]["version"],
+            "selection": {
+                "strategy": "uncertainty (binary predictive entropy, per-patient mean)",
+                "budget_patients": report["config"]["budget"],
+                "selected_patients": first["selections"]["uncertainty"],
+                "experiment_seed": 0,
+            },
+            "total_patients": len(assignment),
+            "total_images": int(len(subset)),
+        }
+        known_issues = [
+            "Training pool is a SUBSET of v1.0: it contains the simulated "
+            "annotation round only, so it has fewer training patients than v1.0.",
+            "Validation and test splits are byte-identical to v1.0, which is what "
+            "makes before/after comparison valid.",
+            "Subdural hemorrhage has zero validation and test examples (Step 11), "
+            "so subdural performance remains unmeasurable in this version too.",
+            "Patients were selected by model uncertainty, so this pool is "
+            "deliberately NOT a random sample of the population.",
+        ]
+        write_release(release_dir, subset, assignment, pseudonyms, stats, metadata, known_issues)
+        print(f"Published {version}: {len(assignment)} patients, {len(subset)} images")
+        print(f"  {release_dir}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="medimageforge")
     parser.add_argument(
@@ -830,6 +985,15 @@ def main() -> int:
     p_eval.add_argument(
         "--top-n", type=int, default=None, help="How many worst mistakes to list"
     )
+    p_active = sub.add_parser(
+        "active-learning",
+        help="Uncertainty sampling vs a random control, then publish v1.1",
+    )
+    p_active.add_argument("--seeds", type=int, default=None, help="How many repeats")
+    p_active.add_argument("--budget", type=int, default=None, help="Patients to annotate")
+    p_active.add_argument(
+        "--publish", action="store_true", help="Publish the adopted pool as v1.1"
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -860,6 +1024,8 @@ def main() -> int:
         return cmd_train(config, args.epochs)
     if args.command == "evaluate":
         return cmd_evaluate(config, args.run, args.split, args.top_n)
+    if args.command == "active-learning":
+        return cmd_active_learning(config, args.seeds, args.budget, args.publish)
     return 1
 
 

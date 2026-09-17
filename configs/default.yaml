@@ -62,6 +62,13 @@ training:
   dropout: 0.3
   seed: 20260915
 
+active_learning:
+  seed_fraction: 0.4                      # fraction of train patients labelled at round 0
+  budget: 12                              # patients a reviewer can annotate this round
+  seeds: 3                                # repeat the whole experiment N times
+  uncertainty_rule: mean                  # aggregate slice entropy per patient: mean | max
+  next_version: v1.1
+
 evaluation:
   top_n: 8                                # how many worst mistakes to list and render
   # A missed hemorrhage is far costlier than a false alarm, so we also report the
