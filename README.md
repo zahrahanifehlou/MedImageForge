@@ -168,12 +168,12 @@ Six phases • Eighteen steps. Checkboxes track progress.
 
 *Goal: the pipelines become a platform other programs can talk to.*
 
-- [ ] **Step 13 — Lineage & audit log**  
+- [x] **Step 13 — Lineage & audit log**  
   **Build:** Every pipeline run appends an audit record. Query full ancestry of any artifact.  
   **Why:** Traceability is the core regulated-MedTech requirement — and the best debugging tool.  
   **Done:** Pick a file in `v1.1` and print its complete history.
 
-- [ ] **Step 14 — API service**  
+- [x] **Step 14 — API service**  
   **Build:** FastAPI service exposing patients, slices, labels, dataset versions, QC status.  
   **Why:** A service boundary forces clean data access patterns and is the future home of access control.  
   **Done:** Query the manifest over HTTP; the UI uses only this API.

@@ -16,3 +16,9 @@ kagglehub==1.0.1
 # Install with:
 #   pip install torch==2.13.0+cpu --index-url https://download.pytorch.org/whl/cpu
 torch==2.13.0+cpu
+
+# Step 14 — read-only HTTP API. Pinned one minor release behind the newest
+# at install time (vetted, not brand-new).
+fastapi==0.140.13
+uvicorn==0.52.4
+httpx==0.28.1     # required by fastapi.testclient in tests

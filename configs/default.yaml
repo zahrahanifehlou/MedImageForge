@@ -19,6 +19,7 @@ paths:
   datasets_dir: datasets                  # immutable dataset releases (v1.0, v1.1, ...)
   runs_dir: artifacts/runs                # one folder per training run: record, weights, predictions
   eval_dir: artifacts/eval                # per-run evaluation reports and error-analysis images
+  audit_log: artifacts/audit.log          # append-only, hash-chained record of every pipeline run
   salt_file: .secrets/pseudonym_salt      # re-identification key: gitignored, NEVER committed
 
 dataset:
@@ -75,6 +76,10 @@ evaluation:
   # operating point that reaches this recall — whatever precision it costs.
   high_sensitivity_recall: 0.90
   bootstrap_resamples: 2000
+
+api:
+  host: 127.0.0.1                         # localhost only — no auth yet, so no network exposure
+  port: 8000
 
 logging:
   level: INFO                             # DEBUG while developing, INFO+ in "production"
