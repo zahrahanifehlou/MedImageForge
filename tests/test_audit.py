@@ -388,7 +388,7 @@ def test_every_command_handler_has_a_spec():
     expected = {
         "info", "explore", "inspect", "ingest", "curate", "privacy",
         "load-labels", "show-slice", "qc", "release", "train", "evaluate",
-        "active-learning", "serve",
+        "active-learning", "serve", "ui",
     }
     assert set(AUDIT_IO) == expected
     # `audit` must NOT audit itself

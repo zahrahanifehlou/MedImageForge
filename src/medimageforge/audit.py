@@ -107,6 +107,9 @@ AUDIT_IO: dict[str, dict[str, list[str]]] = {
         "inputs": ["manifest_db", "curated_dir", "datasets_dir", "audit_log", "deid_dir"],
         "outputs": [],
     },
+    # The UI talks to the API over HTTP — it touches no platform files.
+    # Logging its launches still records when review sessions happened.
+    "ui": {"inputs": [], "outputs": []},
     # `audit` is deliberately absent: the observer does not observe itself.
 }
 

@@ -22,3 +22,7 @@ torch==2.13.0+cpu
 fastapi==0.140.13
 uvicorn==0.52.4
 httpx==0.28.1     # required by fastapi.testclient in tests
+
+# Step 15 — review UI. A pure API client: the UI imports no pipeline
+# internals, so streamlit is a UI-layer dependency only.
+streamlit==1.63.0

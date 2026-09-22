@@ -81,5 +81,8 @@ api:
   host: 127.0.0.1                         # localhost only — no auth yet, so no network exposure
   port: 8000
 
+ui:
+  port: 8501                              # streamlit default; the API URL is set in the sidebar
+
 logging:
   level: INFO                             # DEBUG while developing, INFO+ in "production"

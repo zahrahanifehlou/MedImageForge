@@ -952,6 +952,24 @@ def cmd_serve(config: dict, host: str | None, port: int | None) -> int:
     return 0
 
 
+def cmd_ui(config: dict, port: int | None) -> int:
+    """Launch the Streamlit review UI (Step 15). Blocks until Ctrl-C."""
+    import subprocess
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    ui_script = _Path(__file__).parent / "ui.py"
+    ui_port = port or config.get("ui", {}).get("port", 8501)
+    api = config["api"]
+    print(f"Starting UI on http://127.0.0.1:{ui_port}")
+    print(f"(expects the API at http://{api['host']}:{api['port']} — "
+          f"start it with `python -m medimageforge serve`)")
+    return subprocess.call(
+        [_sys.executable, "-m", "streamlit", "run", str(ui_script),
+         "--server.port", str(ui_port), "--server.headless", "true"]
+    )
+
+
 def cmd_audit(config: dict, tail: int, verify: bool, trace: str | None) -> int:
     """Inspect the audit log: list runs, verify the hash chain, or trace lineage."""
     from medimageforge.audit import (
@@ -1096,6 +1114,10 @@ def main() -> int:
     )
     p_serve.add_argument("--host", default=None, help="Bind host (default: config api.host)")
     p_serve.add_argument("--port", type=int, default=None, help="Bind port (default: config api.port)")
+    p_ui = sub.add_parser(
+        "ui", help="Launch the Streamlit review UI (talks only to the API)"
+    )
+    p_ui.add_argument("--port", type=int, default=None, help="UI port (default: 8501)")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -1124,6 +1146,7 @@ def main() -> int:
             config, args.seeds, args.budget, args.publish, args.from_report
         ),
         "serve": lambda: cmd_serve(config, args.host, args.port),
+        "ui": lambda: cmd_ui(config, args.port),
     }
     handler = handlers.get(args.command)
     if handler is None:
