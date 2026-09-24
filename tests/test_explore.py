@@ -23,6 +23,7 @@ def config():
     return load_config()
 
 
+@pytest.mark.needs_data
 def test_scan_finds_all_patients(config):
     patients = scan_raw_dir(
         data_path(config, "raw_dir"),
@@ -33,6 +34,7 @@ def test_scan_finds_all_patients(config):
     assert all(p.slice_counts["brain"] > 0 for p in patients)
 
 
+@pytest.mark.needs_data
 def test_masks_are_not_counted_as_slices(config):
     patients = scan_raw_dir(
         data_path(config, "raw_dir"),
@@ -46,6 +48,7 @@ def test_masks_are_not_counted_as_slices(config):
     assert brain_slices == 2501
 
 
+@pytest.mark.needs_data
 def test_labels_parse_and_cover_every_brain_slice(config):
     labels = load_labels(data_path(config, "labels_csv"))
     assert "PatientNumber" in labels.columns  # BOM stripped correctly
@@ -53,11 +56,13 @@ def test_labels_parse_and_cover_every_brain_slice(config):
     assert labels["PatientNumber"].nunique() == 82
 
 
+@pytest.mark.needs_data
 def test_demographics_parse(config):
     demographics = load_demographics(data_path(config, "demographics_csv"))
     assert len(demographics) == 82
 
 
+@pytest.mark.needs_data
 def test_checksums_pass_on_real_data(config):
     report = verify_checksums(
         data_path(config, "data_dir"), data_path(config, "checksums_file")

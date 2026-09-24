@@ -13,8 +13,8 @@ kagglehub==1.0.1
 
 # Step 10 — baseline model. CPU build: far smaller than the CUDA wheel and
 # enough for a ~100k-parameter CNN on 1750 slices (~70 s for 15 epochs).
-# Install with:
-#   pip install torch==2.13.0+cpu --index-url https://download.pytorch.org/whl/cpu
+# Install with (extra index — the +cpu wheel is not on PyPI):
+#   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.13.0+cpu
 
 # Step 14 — read-only HTTP API. Pinned one minor release behind the newest

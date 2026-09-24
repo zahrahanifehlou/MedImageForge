@@ -4,6 +4,8 @@ These verify the things every later step will rely on:
 config loads, paths resolve to real places, logging is usable.
 """
 
+import pytest
+
 from medimageforge import __version__
 from medimageforge.config import PROJECT_ROOT, data_path, load_config
 
@@ -26,6 +28,7 @@ def test_configured_paths_resolve_inside_project():
         assert str(p).startswith(str(PROJECT_ROOT))
 
 
+@pytest.mark.needs_data
 def test_dataset_is_present():
     # The CT-ICH dataset must be in place for every later step.
     config = load_config()

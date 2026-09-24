@@ -331,6 +331,7 @@ def test_card_renders_every_split():
 # the real published release
 # ---------------------------------------------------------------------------
 
+@pytest.mark.needs_data
 def test_real_release_has_no_patient_overlap_and_verifies():
     config = load_config()
     release_dir = data_path(config, "datasets_dir") / config["release"]["version"]

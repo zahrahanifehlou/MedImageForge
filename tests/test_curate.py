@@ -206,6 +206,7 @@ def test_raw_zone_is_never_modified(broken_dataset):
     assert before == after
 
 
+@pytest.mark.needs_data
 def test_real_curation_matches_manifest():
     """On the real dataset: every image curated, only metadata left as raw."""
     config = load_config()

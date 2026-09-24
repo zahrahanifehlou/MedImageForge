@@ -71,7 +71,7 @@ def page_patients(client) -> None:
         return
     frame = pd.DataFrame(patients)
     st.subheader(f"{len(frame)} patients")
-    st.dataframe(frame, use_container_width=True, hide_index=True)
+    st.dataframe(frame, width="stretch", hide_index=True)
 
     pseudonym = st.selectbox(
         "Patient", frame["pseudonym"],
@@ -161,7 +161,7 @@ def page_datasets(client) -> None:
         st.error(err)
         return
     st.subheader(f"{len(datasets)} dataset release(s)")
-    st.dataframe(pd.DataFrame(datasets), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(datasets), width="stretch", hide_index=True)
 
     for row in datasets:
         detail, err = _guard(get_dataset, client, row["version"])
@@ -191,7 +191,7 @@ def page_qc(client) -> None:
         st.error(f"QC gate: {body['gate']} — {body['n_errors']} errors, "
                  f"{body['n_warnings']} warnings")
     st.dataframe(
-        pd.DataFrame(body["checks"]), use_container_width=True, hide_index=True
+        pd.DataFrame(body["checks"]), width="stretch", hide_index=True
     )
 
 
@@ -220,7 +220,7 @@ def page_audit(client) -> None:
         }
         for r in reversed(body["records"])
     ]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 def page_labels(client) -> None:
@@ -231,7 +231,7 @@ def page_labels(client) -> None:
     st.subheader("Label distribution")
     frame = pd.DataFrame(rows)
     st.bar_chart(frame.set_index("display_name")["positives"])
-    st.dataframe(frame, use_container_width=True, hide_index=True)
+    st.dataframe(frame, width="stretch", hide_index=True)
 
 
 # ---------------------------------------------------------------------------

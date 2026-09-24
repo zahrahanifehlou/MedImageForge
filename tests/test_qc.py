@@ -357,6 +357,7 @@ def test_errors_fail_the_gate():
 # the real dataset
 # ---------------------------------------------------------------------------
 
+@pytest.mark.needs_data
 def test_real_dataset_has_no_errors_but_finds_known_warnings():
     config = load_config()
     db = data_path(config, "manifest_db")

@@ -1,0 +1,14 @@
+# Never bake data or secrets into the image
+data/
+artifacts/
+datasets/
+.secrets/
+
+# Local environment + caches
+.venv/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/

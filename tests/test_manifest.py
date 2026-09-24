@@ -92,6 +92,7 @@ def test_vanished_file_is_marked_missing_not_deleted(tiny_dataset):
     assert row["status"] == "missing"  # row still there, flagged
 
 
+@pytest.mark.needs_data
 def test_manifest_matches_explorer_counts():
     """The roadmap's Done criterion: manifest counts == Step 2 counts."""
     config = load_config()

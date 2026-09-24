@@ -5,6 +5,7 @@ the real dataset only for load_gray — the one thing that must match reality.
 """
 
 import numpy as np
+import pytest
 
 from medimageforge.config import data_path, load_config
 from medimageforge.imaging import (
@@ -16,6 +17,7 @@ from medimageforge.imaging import (
 )
 
 
+@pytest.mark.needs_data
 def test_load_gray_real_slice():
     config = load_config()
     arr = load_gray(data_path(config, "raw_dir") / "049" / "brain" / "14.jpg")

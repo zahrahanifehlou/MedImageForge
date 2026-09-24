@@ -20,6 +20,29 @@ from medimageforge.annotations import load_annotations
 from medimageforge.api import create_app
 from medimageforge.manifest import ingest
 
+# -- dataset gating ----------------------------------------------------------
+# Tests marked needs_data exercise the REAL dataset and the artifacts the
+# pipeline produced from it. On a clean checkout (CI) neither exists, and
+# they must SKIP — a missing dataset is a deployment fact, not a failure.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def dataset_available() -> bool:
+    return (REPO_ROOT / "data" / "Patients_CT").is_dir() and (
+        REPO_ROOT / "artifacts" / "manifest.db"
+    ).is_file()
+
+
+def pytest_collection_modifyitems(items):
+    if dataset_available():
+        return
+    skip = pytest.mark.skip(
+        reason="needs_data: dataset/artifacts absent on this checkout"
+    )
+    for item in items:
+        if item.get_closest_marker("needs_data"):
+            item.add_marker(skip)
+
 WINDOWS = ["brain", "bone"]
 MASK_SUFFIX = "_HGE_Seg"
 PSEUDONYM = "PAT-test0123abcd"

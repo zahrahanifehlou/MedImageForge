@@ -178,7 +178,7 @@ Six phases • Eighteen steps. Checkboxes track progress.
   **Why:** A service boundary forces clean data access patterns and is the future home of access control.  
   **Done:** Query the manifest over HTTP; the UI uses only this API.
 
-- [ ] **Step 15 — Dataset browser UI**  
+- [x] **Step 15 — Dataset browser UI**  
   **Build:** Minimal viewer (Streamlit or FiftyOne) to browse patients, windows, overlays, and labels.  
   **Why:** Humans must be able to *see* the data.  
   **Done:** Browse any patient; visually verify labels and masks.
@@ -189,7 +189,7 @@ Six phases • Eighteen steps. Checkboxes track progress.
 
 *Goal: the learning prototype becomes a defensible, documented system.*
 
-- [ ] **Step 16 — Tests, CI & packaging**  
+- [x] **Step 16 — Tests, CI & packaging**  
   **Build:** Fuller pytest suite, GitHub Actions CI, Dockerfile.  
   **Why:** A pipeline nobody can re-run or deploy is a script, not a platform.  
   **Done:** CI runs green on a clean checkout; Docker image runs the CLI.

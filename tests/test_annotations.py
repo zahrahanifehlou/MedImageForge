@@ -205,6 +205,7 @@ def test_corrected_label_updates_in_place(store):
 # the real dataset
 # ---------------------------------------------------------------------------
 
+@pytest.mark.needs_data
 def test_real_store_matches_measured_counts():
     config = load_config()
     db = data_path(config, "manifest_db")

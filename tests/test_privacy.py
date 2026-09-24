@@ -226,6 +226,7 @@ def test_export_drops_the_real_id_column(tmp_path):
 # real dataset
 # ---------------------------------------------------------------------------
 
+@pytest.mark.needs_data
 def test_real_patients_are_all_mapped(tmp_path):
     """Runs against a COPY of the manifest — never the real one.
 
