@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Phase-1%20%E2%80%93%203-green?style=flat-square" alt="Phases 1-3 complete"/>
-  <img src="https://img.shields.io/badge/Phase-4%20%E2%80%93%206-lightgrey?style=flat-square" alt="Phases 4-6 pending"/>
+  <img src="https://img.shields.io/badge/Steps-18%2F18%20complete-brightgreen?style=flat-square" alt="All 18 steps complete"/>
+  <img src="https://img.shields.io/badge/Tests-274%20passing-green?style=flat-square" alt="Tests"/>
   <img src="https://img.shields.io/badge/Python-3.10+-blue?style=flat-square" alt="Python"/>
   <img src="https://img.shields.io/badge/License-Proprietary-red?style=flat-square" alt="License"/>
 </p>
@@ -194,12 +194,12 @@ Six phases • Eighteen steps. Checkboxes track progress.
   **Why:** A pipeline nobody can re-run or deploy is a script, not a platform.  
   **Done:** CI runs green on a clean checkout; Docker image runs the CLI.
 
-- [ ] **Step 17 — Cloud architecture mapping**  
+- [x] **Step 17 — Cloud architecture mapping**  
   **Build:** Documented mapping of every local component to its cloud equivalent + IaC sketch. Optionally one real cloud adapter.  
   **Why:** Once you know what each component *does*, the cloud version is “the same job, different substrate”.  
   **Done:** An architecture document a cloud engineer could implement from.
 
-- [ ] **Step 18 — Compliance documentation & final review**  
+- [x] **Step 18 — Compliance documentation & final review**  
   **Build:** SOP templates, risk register, audit-trail evidence samples, dataset/model cards, final README polish.  
   **Why:** In MedTech, *evidence* is a deliverable.  
   **Done:** A reviewer could audit our data’s journey end-to-end from the docs alone.
@@ -300,8 +300,11 @@ MedImageForge/
 │   └── README.txt, LICENSE.txt, ct_ich.yml, split_data.py   (dataset originals)
 │
 ├── docs/
-│   └── steps/
-│       └── step-01-*.md       ← per-step learning notes: what/why/how
+│   ├── steps/                 ← per-step learning notes: what/why/how (Steps 1-18)
+│   ├── cloud-architecture.md  ← local→cloud component mapping (Step 17)
+│   └── compliance/            ← SOPs, risk register, evidence, cards (Step 18)
+│
+├── infra/                     ← Terraform sketch of the cloud architecture (Step 17)
 │
 ├── src/
 │   └── medimageforge/         ← the installable package (all logic lives here)
@@ -337,10 +340,21 @@ python -m medimageforge info
 pytest
 ```
 
+> **CPU-only PyTorch:** `torch==…+cpu` is not on PyPI — install with
+> `pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu`
+> (extra index, not `--index-url` — see `docs/steps/step-16-tests-ci-packaging.md`).
 
 ---
 
+# Documentation
 
+| Where | What |
+|---|---|
+| `docs/steps/` | 18 step-by-step write-ups — what was built, why, the bugs found |
+| `docs/cloud-architecture.md` + `infra/` | every local component mapped to AWS/GCP/Azure + Terraform sketch |
+| `docs/compliance/` | audit-ready package: data journey, evidence samples, SOPs, risk register, model card |
+
+---
 
 # Success Criteria
 
