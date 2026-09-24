@@ -71,6 +71,37 @@ All steps run on a real, public, anonymized dataset already present in `data/`:
 
 ---
 
+## The Manifest Database
+
+`artifacts/manifest.db` (SQLite) is the platform's **source of truth**. The filesystem is just bytes on disk — the manifest is where every file, every curation decision, every label, and the pseudonym map live as queryable rows.
+
+**Why SQLite?** Zero infrastructure, transactional, single-file (easy to fingerprint for lineage). The schema is deliberately plain SQL so a cloud port (RDS Postgres, Step 17) is a dialect change, not a redesign.
+
+<p align="center"><img src="docs/images/db-schema.png" width="900" alt="manifest.db schema"/></p>
+
+| Table | Rows | What it records | Written by |
+|---|---|---|---|
+| `files` | 5,326 | every file in the raw zone: path, kind, patient, window, **sha256** | `ingest` (Step 4) |
+| `curation` | 5,319 | per-file validation decision + source→curated hashes | `curate` (Step 5) |
+| `patients` | 82 | **real ID ↔ pseudonym** — the only table with real IDs | `privacy` (Step 6) |
+| `slice_annotations` | 2,501 | one row per labeled slice + provenance (source file, its sha256, annotator) | `load-labels` (Step 7) |
+| `slice_labels` | 15,006 | multi-label values per annotation (6 codes each) | `load-labels` |
+| `label_taxonomy` | 6 | the label dictionary — names are data, not schema | `load-labels` |
+
+Live rows from the real database:
+
+<p align="center"><img src="docs/images/db-sample.png" width="900" alt="manifest.db sample rows"/></p>
+
+Three design properties worth noticing:
+
+- **Provenance is columns, not a side system.** `source_sha256` in `curation` and `slice_annotations` links every derived fact back to the exact bytes it came from — that's what makes `audit --trace` able to walk backwards.
+- **The privacy boundary is a table.** `patients` is the *only* place `049 ↔ PAT-98c32af848a5` is stored; the API resolves pseudonyms through it and never echoes `patient_id` back.
+- **Labels are normalized, not a CSV column.** `slice_labels` × `label_taxonomy` means adding a new finding (e.g. `midline_shift`) is a new taxonomy row, not a schema migration.
+
+Regenerate the diagrams: `python scripts/render_db_diagrams.py`
+
+---
+
 ## The Roadmap
 
 Six phases • Eighteen steps. Checkboxes track progress.
