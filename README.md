@@ -346,6 +346,63 @@ pytest
 
 ---
 
+# Running the Pipeline
+
+> **Activate the venv first** — `python -m medimageforge` fails with
+> `No module named medimageforge` if the system Python runs instead:
+> `source .venv/bin/activate` (Linux/macOS) or `.venv\Scripts\Activate.ps1` (Windows).
+
+## Full pipeline (fresh checkout with data in place)
+
+Each step reads the previous step's artifacts — order matters:
+
+```bash
+# data stages
+python -m medimageforge ingest        # hash + register raw files → manifest.db
+python -m medimageforge curate        # validate + normalize → artifacts/curated/
+python -m medimageforge privacy       # PHI gate → pseudonymized artifacts/deid/
+python -m medimageforge load-labels   # labels CSV → manifest label store
+python -m medimageforge qc            # quality gates (gate: PASS required)
+python -m medimageforge release       # publish immutable datasets/vX.Y
+
+# model stages
+python -m medimageforge train         # trains on the release → artifacts/runs/<id>/
+python -m medimageforge evaluate      # metrics + error analysis (latest run)
+
+# services (separate terminals)
+python -m medimageforge serve         # API on :8000
+python -m medimageforge ui            # Streamlit on :8501
+
+# integrity
+python -m medimageforge audit --verify
+```
+
+## Re-running after a change — only re-run what depends on it
+
+| You changed… | Re-run |
+|---|---|
+| `training.epochs` / hyperparameters | `train`, then `evaluate` — nothing upstream is affected |
+| the label CSV | `load-labels` → `qc` → bump `release.version` → `release` |
+| data files in `data/` | `ingest` → `curate` → `privacy` → `load-labels` → `qc` → new `release` → `train` → `evaluate` |
+| nothing | nothing — `info`, `audit`, `serve`, `ui` work anytime |
+
+## Rules the CLI enforces (so you don't have to remember)
+
+- **`release` refuses to overwrite** an existing version — bump
+  `release.version` in `configs/default.yaml` to publish a new snapshot.
+  `--force` exists but defeats the point of immutability.
+- **`train` never overwrites a run** — each invocation writes a new
+  `artifacts/runs/run-<timestamp>/`, so experiments are comparable.
+- **`evaluate` is read-only** — the threshold comes from the run record,
+  never re-tuned on test.
+- **Overrides without editing config:** `train --epochs 25`,
+  `qc --skip-leakage`, `release --verify`, `active-learning --seeds 8`.
+- **Every command appends to `artifacts/audit.log`** — actor, argv, config
+  hash, input/output fingerprints. `audit --trace <path>` reconstructs
+  lineage; `audit --verify` proves the log wasn't edited.
+
+---
+
 # Documentation
 
 | Where | What |
