@@ -1,7 +1,7 @@
 # MedImageForge
 
 <p align="center">
-  <img src="docs/images/medimageforge-logo.jpg" alt="MedImageForge Logo" width="520"/>
+  <img src="docs/images/medimageforge-logo.jpg" alt="MedImageForge Logo" />
 </p>
 
 <p align="center">
